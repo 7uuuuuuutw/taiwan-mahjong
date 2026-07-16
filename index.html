@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>台灣麻將 · 連線對戰</title>
+  <!-- v= 版本號：每次改版把下面所有 v=9 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=9">
+</head>
+<body>
+
+  <!-- ===== 大廳 ===== -->
+  <div id="lobby-screen" class="screen active">
+    <div class="lobby-card">
+      <h1>🀄 台灣麻將</h1>
+      <p class="subtitle">16 張 · 連線對戰 · 電腦補位</p>
+
+      <label class="field">
+        <span>你的暱稱</span>
+        <input id="name-input" type="text" maxlength="8" placeholder="輸入暱稱">
+      </label>
+
+      <div class="lobby-actions">
+        <button id="btn-create" class="big-btn primary">開新房間</button>
+        <div class="or">或</div>
+        <div class="join-row">
+          <input id="join-code-input" type="text" maxlength="4" placeholder="房號" autocomplete="off">
+          <button id="btn-join" class="big-btn">加入房間</button>
+        </div>
+      </div>
+
+      <p class="hint-text">
+        開房後把 4 碼房號給朋友即可一起玩。<br>
+        不滿 4 人時空位由電腦補上。
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== 等待室 ===== -->
+  <div id="room-screen" class="screen">
+    <div class="room-card">
+      <h2>等待室</h2>
+      <div class="room-code-box">
+        <span class="code-label">房號</span>
+        <span id="room-code-display" class="code-value">----</span>
+        <button id="btn-copy" class="mini-btn">複製</button>
+      </div>
+
+      <div id="player-list" class="player-list"></div>
+
+      <div id="host-controls" style="display:none">
+        <div class="settings-row">
+          <label>底 / 台
+            <select id="opt-stakes">
+              <option value="30,10">30 / 10</option>
+              <option value="50,20">50 / 20</option>
+              <option value="100,50">100 / 50</option>
+              <option value="200,50">200 / 50</option>
+              <option value="300,100">300 / 100</option>
+            </select>
+          </label>
+          <label>出牌計時
+            <select id="opt-timer">
+              <option value="20">20 秒</option>
+              <option value="10">10 秒</option>
+              <option value="5">5 秒</option>
+              <option value="0">不計時</option>
+            </select>
+          </label>
+          <label>電腦強度
+            <select id="opt-ai">
+              <option value="normal">普通</option>
+              <option value="easy">簡單</option>
+              <option value="hard">困難</option>
+            </select>
+          </label>
+          <label>牌背顏色
+            <select id="opt-back">
+              <option value="green">經典綠</option>
+              <option value="blue">寶石藍</option>
+              <option value="red">朱砂紅</option>
+              <option value="purple">紫羅蘭</option>
+              <option value="night">墨黑</option>
+            </select>
+          </label>
+        </div>
+        <button id="btn-start" class="big-btn primary">開始遊戲</button>
+        <p class="hint-text">空位會由電腦補位，隨時可開始。可用 ↑↓ 調整座位順序。</p>
+      </div>
+      <button id="btn-leave2" class="mini-btn ghost">離開</button>
+    </div>
+  </div>
+
+  <!-- ===== 牌桌 ===== -->
+  <div id="game-screen" class="screen">
+    <div class="info-bar">
+      <span id="info-round">東圈</span>
+      <span id="info-dealer">莊：-</span>
+      <span id="info-wall">剩 - 張</span>
+      <span id="info-timer" class="info-timer" style="display:none"></span>
+      <span id="info-msg" class="info-msg"></span>
+      <button id="btn-sound" class="mini-btn ghost" title="音效開關">🔊</button>
+      <button id="btn-leave" class="mini-btn ghost">離開</button>
+    </div>
+
+    <div class="table">
+      <!-- 對家(上) -->
+      <div id="seat-top" class="seat seat-top">
+        <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
+        <div class="seat-flowers"></div>
+        <div class="seat-melds"></div>
+        <div class="seat-hand"></div>
+      </div>
+
+      <div class="table-middle">
+        <!-- 左家 -->
+        <div id="seat-left" class="seat seat-left">
+          <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
+          <div class="seat-flowers"></div>
+          <div class="seat-melds"></div>
+          <div class="seat-hand"></div>
+        </div>
+
+        <!-- 中央棄牌池 -->
+        <div id="discard-pool" class="discard-pool"></div>
+
+        <!-- 右家 -->
+        <div id="seat-right" class="seat seat-right">
+          <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
+          <div class="seat-flowers"></div>
+          <div class="seat-melds"></div>
+          <div class="seat-hand"></div>
+        </div>
+      </div>
+
+      <!-- 自己(下) -->
+      <div id="seat-bottom" class="seat seat-bottom">
+        <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
+        <div class="seat-flowers"></div>
+        <div class="seat-melds"></div>
+        <div class="seat-hand"></div>
+      </div>
+    </div>
+
+    <div id="action-bar" class="action-bar" style="display:none"></div>
+    <!-- 常駐胡牌鈕：牌未成按下 = 詐胡！ -->
+    <button id="btn-hu" class="hu-btn" title="宣告胡牌（按錯會詐胡賠付！）">胡</button>
+  </div>
+
+  <!-- ===== 結算彈窗 ===== -->
+  <div id="result-modal" class="modal" style="display:none">
+    <div class="modal-card">
+      <div id="result-body"></div>
+      <button id="btn-next" class="big-btn primary">下一局</button>
+      <button id="btn-end" class="big-btn danger" style="display:none">結束遊戲</button>
+      <button id="btn-lobby" class="big-btn" style="display:none">回等待室</button>
+      <p id="next-wait-msg" class="hint-text" style="display:none">等待房主開始下一局…</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- 遊戲程式 -->
+  <script src="mahjong.js?v=9"></script>
+  <script src="tiles.js?v=9"></script>
+  <script src="sound.js?v=9"></script>
+  <script src="ai.js?v=9"></script>
+  <script src="game.js?v=9"></script>
+  <script src="network.js?v=9"></script>
+  <script src="main.js?v=9"></script>
+</body>
+</html>

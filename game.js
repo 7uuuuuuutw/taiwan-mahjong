@@ -1,0 +1,772 @@
+/* ============================================================
+ * game.js — 牌局狀態機（權威版，跑在 host）
+ * 管理牌牆、回合、吃碰槓胡、結算。
+ * 透過 emit(event, payload) 通知外層（UI / 網路）。
+ * 依賴 mahjong.js、ai.js。
+ * ============================================================ */
+
+const CLAIM_TIMEOUT_MS = 15000; // 人類玩家反應（吃碰槓胡）逾時自動過水
+const TURN_TIME_LIMIT_MS = 20000; // 出牌逾時自動隨機打一張
+const WALL_RESERVE = 16; // 牌尾保留 16 張（8 墩）不摸，摸到剩保留區即流局；每開一槓保留區 +1
+
+class GameEngine {
+  /**
+   * @param {object[]} seats [{id,name,isAI}] 長度 4，座位 0..3
+   * @param {function} emit (event, payload) => void
+   * @param {object} opts {roundWind, dealer, dealerStreak, seed}
+   */
+  constructor(seats, emit, opts = {}) {
+    this.seats = seats.map((s, i) => ({
+      seat: i, id: s.id, name: s.name, isAI: !!s.isAI,
+      hand: [], melds: [], flowers: [], discards: [], score: opts.scores ? opts.scores[i] : 0,
+      connected: true,
+      guoShui: false, // 過水：棄胡後，打出一張牌前不得再胡
+    }));
+    this.emit = emit;
+    this.roundWind = opts.roundWind || 0;   // 0東
+    this.dealer = opts.dealer || 0;
+    this.dealerStreak = opts.dealerStreak || 0;
+    this.baseTai = opts.baseTai || 1;       // 每台幾分
+    this.baseDi = opts.baseDi || 1;         // 底
+    // 出牌時限（毫秒）；0 = 不計時
+    this.turnLimitMs = (opts.turnLimitMs != null) ? opts.turnLimitMs : TURN_TIME_LIMIT_MS;
+    this.aiLevel = opts.aiLevel || 'normal'; // 電腦強度 easy/normal/hard
+    this.wallReserve = WALL_RESERVE; // 牌尾保留區（每局於 dealAndBegin 重設）
+    this.rng = mulberry32(opts.seed || (Date.now() >>> 0));
+    this.phase = 'idle';
+    this.claimWindow = null;
+    this.claimTimer = null;
+    this.turnTimer = null;
+    this.lastDrawWasKong = false;
+    this.drawnTile = null;
+  }
+
+  /** 銷毀：停掉所有計時器並靜音事件（回等待室時呼叫，避免舊局干擾新局） */
+  destroy() {
+    this.dead = true;
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.emit = () => {};
+  }
+
+  /* -------- 出牌計時（人類逾時自動隨機打）-------- */
+  armTurnTimer(seat) {
+    clearTimeout(this.turnTimer);
+    if (!this.turnLimitMs) return; // 不計時
+    this.turnTimer = setTimeout(() => this.autoDiscard(seat), this.turnLimitMs);
+  }
+  clearTurnTimer() {
+    clearTimeout(this.turnTimer);
+    this.turnTimer = null;
+  }
+  autoDiscard(seat) {
+    if (this.phase !== 'act' || this.turn !== seat) return;
+    const p = this.seats[seat];
+    const pool = p.hand.filter(t => !isFlower(t));
+    if (pool.length === 0) return;
+    const tile = pool[Math.floor(Math.random() * pool.length)];
+    this.discard(seat, tile);
+  }
+
+  /* -------- 擲骰（每局開始由莊家擲三顆）--------
+   * 骰數和決定東風位（正花「春/梅」對應的座位）；
+   * 全紅(皆1或4) 胡牌+1台、骰歸(等差1) +2台、豹子(三同) 籌碼×3 */
+  rollDice() {
+    const d = () => 1 + Math.floor(this.rng() * 6);
+    this.dice = [d(), d(), d()];
+    const sum = this.dice[0] + this.dice[1] + this.dice[2];
+    // 由莊家起算，依骰數和決定誰坐「東」
+    this.eastSeat = (this.dealer + (sum - 1)) % 4;
+    const sorted = this.dice.slice().sort((a, b) => a - b);
+    this.diceBonus = null;
+    if (sorted[0] === sorted[2]) {
+      this.diceBonus = { name: '豹子', mult: 3, tai: 0 };
+    } else if (sorted[1] === sorted[0] + 1 && sorted[2] === sorted[1] + 1) {
+      this.diceBonus = { name: '骰歸', mult: 1, tai: 2 };
+    } else if (this.dice.every(x => x === 1 || x === 4)) {
+      this.diceBonus = { name: '全紅', mult: 1, tai: 1 };
+    }
+  }
+
+  /* -------- 開始一局：先由莊家擲骰 -------- */
+  startHand() {
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.guoShui = false; }
+    this.dice = null; this.diceBonus = null;
+    this.lastDiscard = null;
+    this.winner = null;
+    this.drawnTile = null;
+    this.phase = 'dice';
+    const dealerP = this.seats[this.dealer];
+    this.emitState(`等待莊家 ${dealerP.name} 擲骰`);
+    if (dealerP.isAI) {
+      setTimeout(() => { if (!this.dead && this.phase === 'dice') this.doRollAndDeal(); }, 1000);
+    } else {
+      this.emit('rollDiceRequest', { seat: this.dealer });
+    }
+  }
+
+  /** 莊家擲骰 → 發牌開打 */
+  doRollAndDeal() {
+    this.rollDice();
+    this.dealAndBegin();
+  }
+
+  dealAndBegin() {
+    const deck = shuffle(buildDeck(), () => this.rng());
+    this.wall = deck;
+    this.wallReserve = WALL_RESERVE; // 每局重設保留區（開槓會 +1）
+    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; }
+    // 發牌：每人 16 張
+    for (let r = 0; r < 16; r++) {
+      for (let k = 0; k < 4; k++) {
+        const seat = (this.dealer + k) % 4;
+        this.seats[seat].hand.push(this.drawFront());
+      }
+    }
+    // 補花（依序）
+    for (let k = 0; k < 4; k++) {
+      const seat = (this.dealer + k) % 4;
+      this.replaceFlowers(seat);
+    }
+    for (const p of this.seats) p.hand = sortTiles(p.hand);
+
+    this.turn = this.dealer;
+    this.phase = 'draw';
+    this.lastDiscard = null;
+    this.winner = null;
+    this.emitState('開始新局');
+    this.doDrawPhase();
+  }
+
+  drawFront() { return this.wall.shift(); }
+  drawBack() { return this.wall.pop(); } // 槓/補花從牌尾摸
+  /** 可摸張數（扣掉牌尾保留區） */
+  drawableCount() { return this.wall.length - this.wallReserve; }
+
+  /** 補花：把手上的花放到 flowers 區，從牌尾補摸，直到沒有花 */
+  replaceFlowers(seat) {
+    const p = this.seats[seat];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < p.hand.length; i++) {
+        if (isFlower(p.hand[i])) {
+          p.flowers.push(p.hand[i]);
+          p.hand.splice(i, 1);
+          if (this.drawableCount() > 0) p.hand.push(this.drawBack());
+          changed = true;
+          break;
+        }
+      }
+    }
+    p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
+  }
+
+  /* -------- 摸牌階段 -------- */
+  doDrawPhase() {
+    if (this.drawableCount() <= 0) return this.drawnGame();
+    const p = this.seats[this.turn];
+    let tile = this.drawFront();
+    // 補花（自摸到花 → 記錄，從牌尾補）
+    while (isFlower(tile)) {
+      p.flowers.push(tile);
+      p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
+      if (this.drawableCount() <= 0) return this.drawnGame();
+      tile = this.drawBack();
+      this.lastDrawWasKong = true; // 補花後再胡 = 槓上開花性質（花槓上）
+    }
+    p.hand.push(tile);
+    p.hand = sortTiles(p.hand);
+    this.drawnTile = tile;
+    this.phase = 'act'; // 該玩家要行動（打牌/自摸/暗槓/加槓）
+
+    const actions = this.selfActions(this.turn, tile);
+    this.tsumoAvailable = actions.tsumo; // 供過水判斷（棄自摸）
+    this.emitState(`${p.name} 摸牌`);
+    if (p.isAI) {
+      this.aiSelfAct(this.turn, tile, actions);
+    } else {
+      this.armTurnTimer(this.turn);
+      this.emit('yourTurn', { seat: this.turn, tile, actions, timeLimit: this.turnLimitMs / 1000 });
+    }
+  }
+
+  /** 計算摸牌後自己可做的動作 */
+  selfActions(seat, tile) {
+    const p = this.seats[seat];
+    const a = { discard: true, tsumo: false, concealedKongs: [], addKongs: [] };
+    // 自摸（過水中不得自摸）
+    if (!p.guoShui && isWinningHand(p.hand, p.melds)) a.tsumo = true;
+    // 暗槓
+    a.concealedKongs = findConcealedKongs(p.hand);
+    // 加槓（手上有牌與已碰的刻子相同）
+    for (const m of p.melds) {
+      if (m.type === 'pong' && p.hand.includes(m.tiles[0])) a.addKongs.push(m.tiles[0]);
+    }
+    return a;
+  }
+
+  /* -------- 玩家行動（來自 UI / AI）-------- */
+  playerAct(seat, action) {
+    // 莊家擲骰
+    if (action.type === 'rollDice') {
+      if (this.phase === 'dice' && seat === this.dealer) this.doRollAndDeal();
+      return;
+    }
+    // 常駐胡牌鈕（按錯 = 詐胡）
+    if (action.type === 'declareHu') return this.declareHuAttempt(seat);
+
+    if (this.phase === 'act' && seat === this.turn) {
+      this.clearTurnTimer();
+      if (action.type === 'discard') return this.discard(seat, action.tile);
+      if (action.type === 'tsumo') return this.declareWin(seat, this.drawnTile, true);
+      if (action.type === 'concealedKong') return this.doConcealedKong(seat, action.tile);
+      if (action.type === 'addKong') return this.doAddKong(seat, action.tile);
+    }
+    if (this.phase === 'claim' && this.claimWindow) {
+      return this.submitClaim(seat, action);
+    }
+  }
+
+  /* -------- 打牌 -------- */
+  discard(seat, tile) {
+    const p = this.seats[seat];
+    const idx = p.hand.indexOf(tile);
+    if (idx < 0) return;
+    // 過水規則：
+    //  - 這次打牌若是「放棄自摸」→ 進入過水（打出一張牌前不得再胡）
+    //  - 否則，打出一張牌即解除過水
+    const decliningTsumo = (this.turn === seat && this.tsumoAvailable);
+    if (decliningTsumo) p.guoShui = true;
+    else if (p.guoShui) p.guoShui = false;
+    this.tsumoAvailable = false;
+
+    p.hand.splice(idx, 1);
+    p.discards.push(tile);
+    p.hand = sortTiles(p.hand);
+    this.lastDiscard = { tile, from: seat };
+    this.lastDrawWasKong = false;
+    this.openClaimWindow(tile, seat);
+  }
+
+  /* -------- 暗槓 / 加槓 -------- */
+  doConcealedKong(seat, tile) {
+    const p = this.seats[seat];
+    for (let i = 0; i < 4; i++) p.hand.splice(p.hand.indexOf(tile), 1);
+    p.melds.push({ type: 'kong', tiles: [tile, tile, tile, tile], concealed: true });
+    this.afterKongDraw(seat);
+  }
+
+  doAddKong(seat, tile) {
+    const p = this.seats[seat];
+    const m = p.melds.find(mm => mm.type === 'pong' && mm.tiles[0] === tile);
+    // 搶槓檢查：其他人是否可胡這張
+    for (let k = 1; k < 4; k++) {
+      const other = (seat + k) % 4;
+      const op = this.seats[other];
+      if (isWinningHand(op.hand.concat([tile]), op.melds)) {
+        // 允許搶槓
+        this.lastDiscard = { tile, from: seat };
+        this.robbingKong = true;
+        this.openClaimWindow(tile, seat, /*robbing*/ true, m);
+        return;
+      }
+    }
+    m.type = 'kong';
+    m.tiles = [tile, tile, tile, tile];
+    p.hand.splice(p.hand.indexOf(tile), 1);
+    this.afterKongDraw(seat);
+  }
+
+  afterKongDraw(seat) {
+    // 每開一槓，牌尾保留區 +1（海底往前移一張）
+    this.wallReserve += 1;
+    // 槓後從牌尾補摸一張
+    if (this.drawableCount() <= 0) return this.drawnGame();
+    const p = this.seats[seat];
+    let tile = this.drawBack();
+    while (isFlower(tile)) {
+      p.flowers.push(tile);
+      if (this.drawableCount() <= 0) return this.drawnGame();
+      tile = this.drawBack();
+    }
+    p.hand.push(tile);
+    p.hand = sortTiles(p.hand);
+    this.drawnTile = tile;
+    this.lastDrawWasKong = true;
+    this.turn = seat;
+    this.phase = 'act';
+    const actions = this.selfActions(seat, tile);
+    this.tsumoAvailable = actions.tsumo;
+    this.emitState(`${p.name} 槓`);
+    if (p.isAI) this.aiSelfAct(seat, tile, actions);
+    else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile, actions, kong: true, timeLimit: this.turnLimitMs / 1000 }); }
+  }
+
+  /* -------- 開啟索取視窗（吃碰槓胡）-------- */
+  openClaimWindow(tile, from, robbing = false, addKongMeld = null) {
+    const eligible = {};
+    for (let k = 1; k < 4; k++) {
+      const seat = (from + k) % 4;
+      const p = this.seats[seat];
+      const ent = {};
+      // 胡（放槍 / 搶槓）；過水中不得胡
+      if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds)) ent.hu = true;
+      if (!robbing) {
+        if (canPong(p.hand, tile)) ent.pong = true;
+        // 禁止「槓上家」：打牌者若是本座位的上家（本座位為打牌者的下家），不得明槓
+        const isDiscarderMyUpper = (seat === (from + 1) % 4);
+        if (canKong(p.hand, tile) && !isDiscarderMyUpper) ent.kong = true;
+        // 只有下家能吃
+        if (isDiscarderMyUpper) {
+          const opts = canChiOptions(p.hand, tile);
+          if (opts.length) { ent.chi = true; ent.chiOptions = opts; }
+        }
+      }
+      if (Object.keys(ent).length) eligible[seat] = ent;
+    }
+
+    if (Object.keys(eligible).length === 0) {
+      this.robbingKong = false;
+      if (robbing && addKongMeld) {
+        // 無人搶槓 → 完成加槓
+        const p = this.seats[from];
+        addKongMeld.type = 'kong';
+        addKongMeld.tiles = [tile, tile, tile, tile];
+        p.hand.splice(p.hand.indexOf(tile), 1);
+        return this.afterKongDraw(from);
+      }
+      return this.nextTurn(from);
+    }
+
+    this.phase = 'claim';
+    this.claimWindow = { tile, from, robbing, addKongMeld, eligible, responses: {} };
+    this.emitState('等待其他玩家');
+
+    // AI 立即回應；人類發送可行動作
+    for (const seatStr of Object.keys(eligible)) {
+      const seat = +seatStr;
+      const p = this.seats[seat];
+      if (p.isAI) {
+        const decision = aiReactToDiscard(p.hand, p.melds, tile,
+          { hu: eligible[seat].hu, pong: eligible[seat].pong, kong: eligible[seat].kong,
+            chi: eligible[seat].chi, chiOptions: eligible[seat].chiOptions },
+          null, this.aiLevel);
+        this.submitClaim(seat, decision);
+      } else {
+        this.emit('claimOffer', { seat, tile, from, options: eligible[seat] });
+      }
+    }
+    // 逾時保護
+    clearTimeout(this.claimTimer);
+    this.claimTimer = setTimeout(() => this.forceResolveClaims(), CLAIM_TIMEOUT_MS);
+  }
+
+  submitClaim(seat, decision) {
+    if (!this.claimWindow || !this.claimWindow.eligible[seat]) return;
+    this.claimWindow.responses[seat] = decision || { action: 'pass' };
+    const eligibleCount = Object.keys(this.claimWindow.eligible).length;
+    const respCount = Object.keys(this.claimWindow.responses).length;
+    if (respCount >= eligibleCount) this.resolveClaims();
+  }
+
+  forceResolveClaims() {
+    if (!this.claimWindow) return;
+    for (const seatStr of Object.keys(this.claimWindow.eligible)) {
+      if (!this.claimWindow.responses[seatStr]) {
+        this.claimWindow.responses[seatStr] = { action: 'pass' };
+      }
+    }
+    this.resolveClaims();
+  }
+
+  resolveClaims() {
+    clearTimeout(this.claimTimer);
+    const cw = this.claimWindow;
+    if (!cw) return;
+    const { tile, from, responses, robbing, addKongMeld, eligible } = cw;
+
+    // 過水：可胡卻選擇不胡的人，進入過水狀態
+    for (const seatStr of Object.keys(eligible)) {
+      const s = +seatStr;
+      if (eligible[s].hu && (!responses[s] || responses[s].action !== 'hu')) {
+        this.seats[s].guoShui = true;
+      }
+    }
+
+    // 依優先序：胡 > 槓 > 碰 > 吃
+    // 胡可多家同時成立（照出牌順序排列；三家全胡 = 一炮三響）
+    const huSeats = [];
+    let pongKong = null, chi = null;
+    for (let k = 1; k < 4; k++) {
+      const seat = (from + k) % 4;
+      const r = responses[seat];
+      if (!r) continue;
+      if (r.action === 'hu') huSeats.push(seat);
+      if ((r.action === 'kong' || r.action === 'pong') && !pongKong) pongKong = { seat, r };
+      if (r.action === 'chi' && !chi) chi = { seat, r };
+    }
+
+    this.claimWindow = null;
+
+    if (huSeats.length > 0) {
+      this.robbingKong = robbing;
+      return this.multiWin(huSeats, tile, from);
+    }
+    this.robbingKong = false;
+
+    // 若原本是加槓且無人搶槓 → 完成加槓
+    if (robbing && addKongMeld) {
+      const p = this.seats[from];
+      addKongMeld.type = 'kong';
+      addKongMeld.tiles = [tile, tile, tile, tile];
+      p.hand.splice(p.hand.indexOf(tile), 1);
+      return this.afterKongDraw(from);
+    }
+
+    if (pongKong) {
+      const { seat, r } = pongKong;
+      const p = this.seats[seat];
+      // 從打牌者的棄牌移除
+      this.seats[from].discards.pop();
+      if (r.action === 'kong') {
+        for (let i = 0; i < 3; i++) p.hand.splice(p.hand.indexOf(tile), 1);
+        p.melds.push({ type: 'kong', tiles: [tile, tile, tile, tile], concealed: false });
+        this.emitState(`${p.name} 槓`);
+        return this.afterKongDraw(seat);
+      } else {
+        for (let i = 0; i < 2; i++) p.hand.splice(p.hand.indexOf(tile), 1);
+        p.melds.push({ type: 'pong', tiles: [tile, tile, tile], from });
+        p.hand = sortTiles(p.hand);
+        this.turn = seat;
+        this.phase = 'act';
+        this.drawnTile = null;
+        this.emitState(`${p.name} 碰`);
+        const actions = { discard: true, tsumo: false, concealedKongs: findConcealedKongs(p.hand), addKongs: [] };
+        if (p.isAI) this.aiSelfAct(seat, null, actions);
+        else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile: null, actions, timeLimit: this.turnLimitMs / 1000 }); }
+        return;
+      }
+    }
+
+    if (chi) {
+      const { seat, r } = chi;
+      const p = this.seats[seat];
+      this.seats[from].discards.pop();
+      const use = r.chi; // 兩張手牌
+      for (const t of use) p.hand.splice(p.hand.indexOf(t), 1);
+      p.melds.push({ type: 'chi', tiles: sortTiles([tile, ...use]), from });
+      p.hand = sortTiles(p.hand);
+      this.turn = seat;
+      this.phase = 'act';
+      this.drawnTile = null;
+      this.emitState(`${p.name} 吃`);
+      const actions = { discard: true, tsumo: false, concealedKongs: findConcealedKongs(p.hand), addKongs: [] };
+      if (p.isAI) this.aiSelfAct(seat, null, actions);
+      else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile: null, actions, timeLimit: this.turnLimitMs / 1000 }); }
+      return;
+    }
+
+    // 全部過水 → 下一家
+    this.nextTurn(from);
+  }
+
+  nextTurn(from) {
+    this.turn = (from + 1) % 4;
+    this.phase = 'draw';
+    this.doDrawPhase();
+  }
+
+  /* -------- AI 行動 -------- */
+  aiSelfAct(seat, tile, actions) {
+    const p = this.seats[seat];
+    // 延遲一點模擬思考，讓 UI 有動畫感
+    setTimeout(() => {
+      if (this.dead) return;
+      if (this.phase !== 'act' || this.turn !== seat) return;
+      if (actions.tsumo) return this.declareWin(seat, this.drawnTile, true);
+      // 暗槓（有就槓，簡單策略）
+      if (actions.concealedKongs && actions.concealedKongs.length) {
+        return this.doConcealedKong(seat, actions.concealedKongs[0]);
+      }
+      if (actions.addKongs && actions.addKongs.length) {
+        return this.doAddKong(seat, actions.addKongs[0]);
+      }
+      const discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel);
+      this.discard(seat, discardTile);
+    }, 1000); // 電腦間隔一秒出牌
+  }
+
+  /* -------- 胡牌結算 -------- */
+
+  /** 計算某家的胡牌台數並結算籌碼（單胡/多胡共用） */
+  computeWin(seat, winTile, selfDraw, loser) {
+    const p = this.seats[seat];
+    // 自摸時 winTile 已在手上，需扣除一張來當 winTile
+    const handMinus = p.hand.slice();
+    if (selfDraw) handMinus.splice(handMinus.indexOf(winTile), 1);
+    const concealedWin = p.melds.every(m => m.concealed); // 無吃碰明槓
+    const east = (this.eastSeat != null) ? this.eastSeat : this.dealer;
+    const ctx = {
+      hand: handMinus,
+      winTile,
+      melds: p.melds,
+      flowers: p.flowers,
+      selfDraw,
+      isDealer: seat === this.dealer,
+      // 莊家台/連莊台：莊家胡牌「或」莊家放槍時都要算
+      dealerInvolved: seat === this.dealer || loser === this.dealer,
+      seatWind: (seat - east + 4) % 4, // 風位由骰子決定的東風位起算
+      roundWind: this.roundWind,
+      dealerStreak: this.dealerStreak,
+      robbingKong: !!this.robbingKong,
+      kongBloom: this.lastDrawWasKong && selfDraw,
+      lastTile: this.drawableCount() <= 0, // 摸到/胡到可摸區最後一張 = 海底/河底
+      concealedWin,
+      diceBonus: this.diceBonus,
+    };
+    const score = scoreHand(ctx);
+    score.multiplier = (this.diceBonus && this.diceBonus.mult > 1) ? this.diceBonus.mult : 1;
+    this.settle(seat, score, selfDraw, loser);
+    return {
+      seat, winTile, selfDraw, score,
+      hand: selfDraw ? handMinus : p.hand.slice(), // 亮牌用（不含胡牌張）
+      melds: p.melds, flowers: p.flowers,
+    };
+  }
+
+  /** 自摸（單家胡） */
+  declareWin(seat, winTile, selfDraw) {
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.drawnTile = null;
+    this.phase = 'over';
+    const loser = selfDraw ? null : (this.lastDiscard ? this.lastDiscard.from : null);
+    const w = this.computeWin(seat, winTile, selfDraw, loser);
+    this.winner = { seat, winTile, selfDraw, score: w.score };
+    this.robbingKong = false;
+    this.emit('handOver', {
+      result: 'win', winners: [w], from: loser,
+      scores: this.seats.map(s => s.score),
+      dealerWin: seat === this.dealer,
+      baseDi: this.baseDi, baseTai: this.baseTai,
+    });
+    this.emitState('本局結束');
+  }
+
+  /** 放槍（可能多家同胡；三家全胡 = 一炮三響，放槍者付三家） */
+  multiWin(huSeats, tile, from) {
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.drawnTile = null;
+    this.phase = 'over';
+    const winners = huSeats.map(seat => this.computeWin(seat, tile, false, from));
+    // 連莊判定：莊家在贏家之中
+    const dealerWin = huSeats.includes(this.dealer);
+    this.winner = { seat: huSeats[0], winTile: tile, selfDraw: false, score: winners[0].score };
+    this.robbingKong = false;
+    this.emit('handOver', {
+      result: 'win', winners, from,
+      multiShot: winners.length >= 3 ? '一炮三響' : (winners.length === 2 ? '一炮雙響' : null),
+      scores: this.seats.map(s => s.score),
+      dealerWin,
+      baseDi: this.baseDi, baseTai: this.baseTai,
+    });
+    this.emitState('本局結束');
+  }
+
+  /* -------- 詐胡 --------
+   * 亂按胡但牌未成：賠給每家「自己最接近胡牌」的點數；
+   * 付給莊家時再加莊家/連莊台（更包含莊家）。詐胡後換下一家坐莊。 */
+  falseHu(seat) {
+    if (this.phase === 'over' || this.phase === 'dice') return;
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.claimWindow = null;
+    this.drawnTile = null;
+    this.phase = 'over';
+    const p = this.seats[seat];
+    const estTai = this.estimateNearestWinTai(seat);
+    const dealerExtraTai = 1 + this.dealerStreak * 2;
+    const baseValue = this.baseDi + estTai * this.baseTai;
+    const payments = [];
+    for (const q of this.seats) {
+      if (q.seat === seat) continue;
+      let v = baseValue;
+      // 付給莊家（或詐胡者本身是莊家）→ 加莊家台
+      if (q.seat === this.dealer || seat === this.dealer) v += dealerExtraTai * this.baseTai;
+      q.score += v;
+      p.score -= v;
+      payments.push({ to: q.seat, value: v });
+    }
+    this.winner = null;
+    this.falseHuHappened = true;
+    this.emit('handOver', {
+      result: 'falseHu', offender: seat, estTai, payments,
+      scores: this.seats.map(s => s.score),
+      dealerWin: false,
+      baseDi: this.baseDi, baseTai: this.baseTai,
+    });
+    this.emitState(`${p.name} 詐胡！`);
+  }
+
+  /** 估算某家「最接近的胡牌」台數（聽牌則取可胡牌中最高台；未聽牌 = 0） */
+  estimateNearestWinTai(seat) {
+    const p = this.seats[seat];
+    const east = (this.eastSeat != null) ? this.eastSeat : this.dealer;
+    const baseCtx = {
+      melds: p.melds, flowers: p.flowers, selfDraw: false,
+      isDealer: seat === this.dealer, dealerInvolved: false,
+      seatWind: (seat - east + 4) % 4, roundWind: this.roundWind,
+      dealerStreak: 0, concealedWin: p.melds.every(m => m.concealed),
+      diceBonus: this.diceBonus,
+    };
+    const tryHand = (hand16) => {
+      let best = 0;
+      for (const w of getTingTiles(hand16, p.melds)) {
+        const s = scoreHand({ ...baseCtx, hand: hand16, winTile: w });
+        if (s.total > best) best = s.total;
+      }
+      return best;
+    };
+    const hand = p.hand.filter(t => !isFlower(t));
+    const needMelds = 5 - p.melds.length;
+    if (hand.length === needMelds * 3 + 1) return tryHand(hand);   // 等胡狀態
+    if (hand.length === needMelds * 3 + 2) {                       // 剛摸牌：試打每一張
+      let best = 0;
+      for (const t of new Set(hand)) {
+        const rest = hand.slice();
+        rest.splice(rest.indexOf(t), 1);
+        const v = tryHand(rest);
+        if (v > best) best = v;
+      }
+      return best;
+    }
+    return 0;
+  }
+
+  /** 常駐「胡」鈕的宣告：成牌就胡、過水提示、否則詐胡 */
+  declareHuAttempt(seat) {
+    if (this.phase === 'over' || this.phase === 'dice') return;
+    const p = this.seats[seat];
+    // 自己回合（摸牌後）
+    if (this.phase === 'act' && this.turn === seat) {
+      if (isWinningHand(p.hand, p.melds)) {
+        if (p.guoShui) { this.emitState(`${p.name} 過水中，不能自摸`); return; }
+        this.clearTurnTimer();
+        return this.declareWin(seat, this.drawnTile || p.hand[p.hand.length - 1], true);
+      }
+      return this.falseHu(seat);
+    }
+    // 索取階段（別人打牌）
+    if (this.phase === 'claim' && this.claimWindow) {
+      const ent = this.claimWindow.eligible[seat];
+      if (ent && ent.hu) return this.submitClaim(seat, { action: 'hu' });
+      const t = this.claimWindow.tile;
+      if (isWinningHand(p.hand.concat([t]), p.melds)) {
+        this.emitState(`${p.name} 過水中，不能胡`);
+        return;
+      }
+      return this.falseHu(seat);
+    }
+    // 其他時機亂按 → 詐胡
+    return this.falseHu(seat);
+  }
+
+  /** 分數結算：(底 + 台×台值) × 骰運倍數（豹子×3） */
+  settle(winner, score, selfDraw, loser) {
+    const value = (this.baseDi + score.total * this.baseTai) * (score.multiplier || 1);
+    if (selfDraw) {
+      // 三家各付
+      for (const p of this.seats) {
+        if (p.seat === winner) p.score += value * 3;
+        else p.score -= value;
+      }
+    } else {
+      this.seats[winner].score += value * 1;
+      if (loser != null) this.seats[loser].score -= value;
+      // 放槍一家付（台灣常見）
+    }
+  }
+
+  drawnGame() {
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.drawnTile = null;
+    this.phase = 'over';
+    this.winner = null;
+    this.emit('handOver', {
+      result: 'draw',
+      hands: this.seats.map(s => ({ hand: s.hand, melds: s.melds, flowers: s.flowers })),
+      scores: this.seats.map(s => s.score),
+    });
+    this.emitState('流局');
+  }
+
+  /** 進入下一局（莊家連莊 / 換莊） */
+  nextHand(dealerWin) {
+    if (dealerWin) {
+      this.dealerStreak += 1;
+    } else {
+      this.dealer = (this.dealer + 1) % 4;
+      this.dealerStreak = 0;
+      if (this.dealer === 0) this.roundWind = (this.roundWind + 1) % 4;
+    }
+    this.startHand();
+  }
+
+  /* -------- 對外狀態 -------- */
+  emitState(msg) {
+    this.emit('state', { snapshot: this.snapshot(), message: msg });
+  }
+
+  /** 完整快照（host 內部用）；送給各家時再遮蔽 */
+  snapshot() {
+    return {
+      phase: this.phase,
+      turn: this.turn,
+      dealer: this.dealer,
+      roundWind: this.roundWind,
+      dealerStreak: this.dealerStreak,
+      wallLeft: this.wall ? Math.max(0, this.drawableCount()) : 0, // 顯示「可摸張數」
+      lastDiscard: this.lastDiscard,
+      dice: this.dice || null,
+      diceBonusName: this.diceBonus ? this.diceBonus.name : null,
+      eastSeat: (this.eastSeat != null) ? this.eastSeat : this.dealer,
+      baseDi: this.baseDi, baseTai: this.baseTai,
+      // 剛摸上來的牌（僅在該玩家要行動、且是真的摸牌而非吃碰時）
+      drawnTile: (this.phase === 'act' && this.drawnTile) ? this.drawnTile : null,
+      drawnBy: this.turn,
+      seats: this.seats.map(s => ({
+        seat: s.seat, name: s.name, isAI: s.isAI,
+        handCount: s.hand.length, hand: s.hand,
+        melds: s.melds, flowers: s.flowers, discards: s.discards, score: s.score,
+        guoShui: s.guoShui,
+      })),
+    };
+  }
+
+  /** 針對某座位的視圖：只顯示自己的手牌，其餘只給張數 */
+  viewFor(seat) {
+    const snap = this.snapshot();
+    snap.you = seat;
+    snap.seats = snap.seats.map(s => {
+      if (s.seat === seat) return s;
+      const { hand, ...rest } = s;
+      return { ...rest, hand: null };
+    });
+    return snap;
+  }
+}
+
+/** 種子亂數，讓同一局可重現（若日後需要） */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
