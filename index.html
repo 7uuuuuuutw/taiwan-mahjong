@@ -4,16 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>台灣麻將 · 連線對戰</title>
-  <!-- v= 版本號：每次改版把下面所有 v=9 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=9">
+  <!-- 思源宋體（明體）：中文標題與牌型宣告用；斷網時退回系統明體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+  <!-- v= 版本號：每次改版把下面所有 v=15 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
   <!-- ===== 大廳 ===== -->
   <div id="lobby-screen" class="screen active">
     <div class="lobby-card">
-      <h1>🀄 台灣麻將</h1>
-      <p class="subtitle">16 張 · 連線對戰 · 電腦補位</p>
+      <h1>台灣麻將<span class="seal-stamp">雀</span></h1>
+      <p class="subtitle">十六張 · 連線對戰 · 電腦補位</p>
 
       <label class="field">
         <span>你的暱稱</span>
@@ -158,17 +162,29 @@
     </div>
   </div>
 
+  <!-- ===== 胡牌牌型全螢幕宣告（>2台時，進結算前浮現） ===== -->
+  <div id="win-splash" class="win-splash" style="display:none">
+    <div class="splash-ring"></div>
+    <div class="splash-inner">
+      <div class="splash-who"></div>
+      <div class="splash-types"></div>
+      <div class="splash-tai"></div>
+      <div class="splash-seal">胡</div>
+      <div class="splash-hint">點擊跳過</div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=9"></script>
-  <script src="tiles.js?v=9"></script>
-  <script src="sound.js?v=9"></script>
-  <script src="ai.js?v=9"></script>
-  <script src="game.js?v=9"></script>
-  <script src="network.js?v=9"></script>
-  <script src="main.js?v=9"></script>
+  <script src="mahjong.js?v=15"></script>
+  <script src="tiles.js?v=15"></script>
+  <script src="sound.js?v=15"></script>
+  <script src="ai.js?v=15"></script>
+  <script src="game.js?v=15"></script>
+  <script src="network.js?v=15"></script>
+  <script src="main.js?v=15"></script>
 </body>
 </html>

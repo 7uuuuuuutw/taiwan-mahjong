@@ -353,9 +353,13 @@ function scoreHand(ctx) {
   const flowers = ctx.flowers || [];
   const concealedWin = ctx.concealedWin; // 門清（無吃碰明槓）
 
+  /* --- 哩咕（八對半：7對+1刻，門清限定；本身不再計門清台） --- */
+  const liGu = isLiGu(fullHand, ctx.melds || []);
+  if (liGu) add('哩咕(八對半)', 8);
+
   /* --- 基本 --- */
   if (ctx.selfDraw) add('自摸', 1);
-  if (concealedWin) {
+  if (concealedWin && !liGu) {
     if (ctx.selfDraw) add('門清自摸', 2);
     else add('門清', 1);
   }
@@ -373,12 +377,8 @@ function scoreHand(ctx) {
   /* --- 骰運（開局莊家擲骰） --- */
   if (ctx.diceBonus && ctx.diceBonus.tai > 0) add('骰運·' + ctx.diceBonus.name, ctx.diceBonus.tai);
 
-  /* --- 聽牌型分析（平胡/中洞/邊張 共用）--- */
+  /* --- 聽牌型分析（平胡/中洞/邊張/單吊 共用）--- */
   const winWaits = getTingTiles(ctx.hand, ctx.melds || []);
-
-  /* --- 哩咕（八對半：7對+1刻，門清限定）--- */
-  const liGu = isLiGu(fullHand, ctx.melds || []);
-  if (liGu) add('哩咕(八對半)', 8);
 
   /* --- 花牌：只算「正花」（對應自己門風的花） ---
    * 門風 0東→春(f1)梅(f5)，1南→夏(f2)蘭(f6)，2西→秋(f3)竹(f7)，3北→冬(f4)菊(f8) */
@@ -467,10 +467,10 @@ function scoreHand(ctx) {
     else if (kongs.length === 3) add('三槓', 4);
   }
 
-  /* --- 聽牌型：中洞 / 邊張（各 1 台，需獨聽） --- */
-  if (decomp && isSuited(ctx.winTile)) {
-    const waits = winWaits;
-    if (waits.length === 1 && waits[0] === ctx.winTile) {
+  /* --- 聽牌型：中洞 / 邊張 / 單吊（各 1 台，需獨聽；哩咕的單吊照算） --- */
+  if ((decomp || liGu) && winWaits.length === 1 && winWaits[0] === ctx.winTile) {
+    let added = false;
+    if (decomp && isSuited(ctx.winTile)) {
       const suit = ctx.winTile[0];
       const n = parseInt(ctx.winTile.slice(1), 10);
       const dummyMeld = { type: 'chi', tiles: [] }; // 佔一個面子名額
@@ -478,9 +478,17 @@ function scoreHand(ctx) {
         const rest = removeTilesOnce(ctx.hand, [suit + a, suit + b]);
         return rest && isWinningHand(rest, (ctx.melds || []).concat([dummyMeld]));
       };
-      if (n >= 2 && n <= 8 && restWins(n - 1, n + 1)) add('中洞', 1);
-      else if (n === 3 && restWins(1, 2)) add('邊張', 1);
-      else if (n === 7 && restWins(8, 9)) add('邊張', 1);
+      if (n >= 2 && n <= 8 && restWins(n - 1, n + 1)) { add('中洞', 1); added = true; }
+      else if (n === 3 && restWins(1, 2)) { add('邊張', 1); added = true; }
+      else if (n === 7 && restWins(8, 9)) { add('邊張', 1); added = true; }
+    }
+    // 單吊：胡牌張作將（眼）——標準型為其餘暗牌全成面子；
+    // 哩咕型為手上恰有一張胡牌張（湊成第 7 對）
+    if (!added) {
+      const rest = removeTilesOnce(ctx.hand, [ctx.winTile]);
+      const standardDiao = rest && canFormAllMelds(toCounts(rest.filter(t => !isFlower(t))));
+      const liGuDiao = liGu && ctx.hand.filter(t => t === ctx.winTile).length === 1;
+      if (standardDiao || liGuDiao) add('單吊', 1);
     }
   }
 

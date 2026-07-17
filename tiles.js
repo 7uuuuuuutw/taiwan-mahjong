@@ -54,23 +54,24 @@ function coin(cx, cy, r, key) {
     <circle cx="${(cx - r * 0.3).toFixed(1)}" cy="${(cy - r * 0.3).toFixed(1)}" r="${(r * 0.16).toFixed(1)}" fill="rgba(255,255,255,.5)"/>`;
 }
 
-/* 一筒：華麗大錢幣（多重彩環） */
+/* 一筒：華麗大錢幣（多重彩環，占滿牌面） */
 function bigCoin() {
   const cx = 50, cy = 66;
   let petals = '';
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const px = cx + Math.cos(a) * 21, py = cy + Math.sin(a) * 21;
-    petals += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.6" fill="${COL.green.main}"/>`;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const px = cx + Math.cos(a) * 32, py = cy + Math.sin(a) * 32;
+    petals += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.6" fill="${COL.green.main}"/>`;
   }
   return `
     ${petals}
-    <circle cx="${cx}" cy="${cy}" r="16.5" fill="${COL.blue.rim}"/>
-    <circle cx="${cx}" cy="${cy}" r="15" fill="${COL.blue.main}"/>
-    <circle cx="${cx}" cy="${cy}" r="11" fill="#f7f4ea"/>
-    <circle cx="${cx}" cy="${cy}" r="9" fill="${COL.red.main}"/>
-    <circle cx="${cx}" cy="${cy}" r="4.5" fill="#f7f4ea"/>
-    <circle cx="${cx}" cy="${cy}" r="2.4" fill="${COL.green.main}"/>`;
+    <circle cx="${cx}" cy="${cy}" r="26" fill="${COL.blue.rim}"/>
+    <circle cx="${cx}" cy="${cy}" r="24" fill="${COL.blue.main}"/>
+    <circle cx="${cx}" cy="${cy}" r="17.5" fill="#f7f4ea"/>
+    <circle cx="${cx}" cy="${cy}" r="14.5" fill="${COL.red.main}"/>
+    <circle cx="${cx}" cy="${cy}" r="7" fill="#f7f4ea"/>
+    <circle cx="${cx}" cy="${cy}" r="3.8" fill="${COL.green.main}"/>
+    <circle cx="${(cx - 8).toFixed(1)}" cy="${(cy - 9).toFixed(1)}" r="3.2" fill="rgba(255,255,255,.45)"/>`;
 }
 
 function dotsSVG(n) {
@@ -124,17 +125,17 @@ function birdSVG() {
     <path d="M50 90 l-4 14 l8 0 Z" fill="${b.main}" opacity=".8"/>`);
 }
 
-/* 八索：兩個 M 形（上下各 4 支，外直內斜） */
+/* 八索：上 W 下 M（各 4 支，外直內斜，內側兩支相對傾斜） */
 function bambooEight() {
   const h = 26;
-  const mShape = (cy) => {
-    // M：兩側直立、中間兩支向內傾（頂端相靠）
-    return bambooStick(26, cy, h, 0, 'green')
-      + bambooStick(42, cy + 4, h, 22, 'blue')
-      + bambooStick(58, cy + 4, h, -22, 'blue')
-      + bambooStick(74, cy, h, 0, 'green');
-  };
-  return mShape(34) + mShape(96);
+  // shape(cy, dir)：dir=+1 → M（中間兩支頂端相靠、略下沉）
+  //                 dir=-1 → W（中間兩支底端相靠、略上抬）
+  const shape = (cy, dir) =>
+    bambooStick(26, cy, h, 0, 'green')
+    + bambooStick(42, cy + 4 * dir, h, 22 * dir, 'blue')
+    + bambooStick(58, cy + 4 * dir, h, -22 * dir, 'blue')
+    + bambooStick(74, cy, h, 0, 'green');
+  return shape(34, -1) + shape(96, 1); // 上 W、下 M
 }
 
 function bambooSVG(n) {

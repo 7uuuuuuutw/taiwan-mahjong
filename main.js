@@ -55,6 +55,38 @@ window.addEventListener('DOMContentLoaded', () => {
 // 音效用：追蹤狀態變化以觸發對應聲音
 let sndPrevDiscards = 0;
 let sndPrevMsg = '';
+// 中央大牌動畫去重（防吃碰考慮期的二次閃爍）
+let prevCenterKey = '';
+
+/* ---------- 電腦角色對話泡泡（純演出） ---------- */
+function charOf(seatName) {
+  return AI_CHARACTERS.find(c => c.emoji + c.name === seatName) || null;
+}
+
+function showSpeech(seatIdx, text) {
+  if (!lastView) return;
+  const rel = (seatIdx - lastView.you + 4) % 4;
+  const seatEl = document.getElementById('seat-' + SEAT_LABELS[rel]);
+  if (!seatEl) return;
+  const old = seatEl.querySelector('.speech-bubble');
+  if (old) old.remove();
+  const b = document.createElement('div');
+  b.className = 'speech-bubble bubble-' + SEAT_LABELS[rel];
+  b.textContent = text;
+  seatEl.appendChild(b);
+  setTimeout(() => { if (b.parentNode) b.remove(); }, 3400);
+}
+
+/** 讓某座位的 AI 依情境說一句話（chance = 開口機率） */
+function maybeSpeak(seatIdx, event, chance = 1) {
+  if (seatIdx == null || seatIdx < 0 || !lastView) return;
+  const s = lastView.seats[seatIdx];
+  if (!s || !s.isAI) return;
+  const ch = charOf(s.name);
+  if (!ch || !ch.lines[event] || Math.random() > chance) return;
+  const lines = ch.lines[event];
+  showSpeech(seatIdx, lines[Math.floor(Math.random() * lines.length)]);
+}
 
 /* ============================================================
  * 開房（HOST）
@@ -63,7 +95,8 @@ function onCreateRoom() {
   myName = (document.getElementById('name-input').value || '玩家').trim().slice(0, 8);
   net.host(myName, (roomCode) => {
     mySeat = 0;
-    lobbyPlayers = [{ seat: 0, name: myName, kind: 'host', peerId: null }];
+    // 固定 4 格：null = 空位（開局補電腦）。玩家可用 ↑↓ 換到任何位置（含對家）
+    lobbyPlayers = [{ seat: 0, name: myName, kind: 'host', peerId: null }, null, null, null];
     document.getElementById('room-code-display').textContent = roomCode;
     document.getElementById('host-controls').style.display = 'block';
     show('room-screen');
@@ -77,8 +110,7 @@ function onCreateRoom() {
     // 等待對方送 join(name)
   });
   net.on('clientLeft', ({ peerId }) => {
-    lobbyPlayers = lobbyPlayers.filter(p => p.peerId !== peerId);
-    reindexSeats();
+    lobbyPlayers = lobbyPlayers.map(p => (p && p.peerId === peerId) ? null : p);
     renderLobby();
     broadcastLobby();
   });
@@ -87,12 +119,12 @@ function onCreateRoom() {
 
 function hostHandleClientMessage(peerId, msg) {
   if (msg.type === 'join') {
-    if (lobbyPlayers.length >= 4) {
+    const seat = lobbyPlayers.findIndex(p => !p);
+    if (seat < 0) {
       net.sendTo(peerId, { type: 'roomFull' });
       return;
     }
-    const seat = lobbyPlayers.length;
-    lobbyPlayers.push({ seat, name: (msg.name || '玩家').slice(0, 8), kind: 'client', peerId });
+    lobbyPlayers[seat] = { seat, name: (msg.name || '玩家').slice(0, 8), kind: 'client', peerId };
     renderLobby();
     broadcastLobby();
   } else if (msg.type === 'action') {
@@ -114,17 +146,16 @@ function seatByPeer(peerId) {
 }
 
 function reindexSeats() {
-  lobbyPlayers.forEach((p, i) => p.seat = i);
+  lobbyPlayers.forEach((p, i) => { if (p) p.seat = i; });
 }
 
 function broadcastLobby() {
+  const players = lobbyPlayers
+    .map((x, i) => x ? { seat: i, name: x.name, isHost: x.kind === 'host' } : null)
+    .filter(Boolean);
   lobbyPlayers.forEach(p => {
-    if (p.kind === 'client') {
-      net.sendTo(p.peerId, {
-        type: 'lobby',
-        players: lobbyPlayers.map(x => ({ seat: x.seat, name: x.name, isHost: x.kind === 'host' })),
-        yourSeat: p.seat,
-      });
+    if (p && p.kind === 'client') {
+      net.sendTo(p.peerId, { type: 'lobby', players, yourSeat: p.seat });
     }
   });
 }
@@ -139,7 +170,7 @@ function renderLobby() {
     if (p) {
       div.innerHTML = `<span class="slot-seat">座位 ${i + 1}</span>
         <span class="slot-name">${escapeHtml(p.name)}${p.kind === 'host' ? ' 👑' : ''}${p.seat === mySeat && net.isHost ? '（你）' : ''}</span>`;
-      // host 可調整座位順序
+      // host 可調整座位（可與空位/電腦互換 → 兩名玩家能坐對家）
       if (net.isHost) {
         const ctrl = document.createElement('span');
         ctrl.className = 'slot-ctrl';
@@ -149,7 +180,7 @@ function renderLobby() {
           up.onclick = () => moveSeat(i, i - 1);
           ctrl.appendChild(up);
         }
-        if (i < lobbyPlayers.length - 1) {
+        if (i < 3) {
           const dn = document.createElement('button');
           dn.className = 'mini-btn'; dn.textContent = '↓';
           dn.onclick = () => moveSeat(i, i + 1);
@@ -165,24 +196,150 @@ function renderLobby() {
   }
 }
 
-/** host 調整座位順序 */
+/** host 調整座位（目標可為空位/電腦位） */
 function moveSeat(a, b) {
-  if (!net.isHost || !lobbyPlayers[a] || !lobbyPlayers[b]) return;
+  if (!net.isHost || !lobbyPlayers[a] || b < 0 || b > 3) return;
   [lobbyPlayers[a], lobbyPlayers[b]] = [lobbyPlayers[b], lobbyPlayers[a]];
   reindexSeats();
   // 更新自己的座位號
-  const me = lobbyPlayers.find(p => p.kind === 'host');
+  const me = lobbyPlayers.find(p => p && p.kind === 'host');
   if (me) mySeat = me.seat;
   renderLobby();
   broadcastLobby();
 }
 
-/* ---------- HOST 開始遊戲 ---------- */
-const AI_PROFILES = [
-  { name: '旺來伯', emoji: '🍍' }, { name: '阿花姨', emoji: '🌺' },
-  { name: '雀聖', emoji: '🐦' }, { name: '紅中俠', emoji: '🀄' },
-  { name: '發財哥', emoji: '💰' }, { name: '骰神', emoji: '🎲' },
-  { name: '月光姐', emoji: '🌙' }, { name: '海底撈', emoji: '🎣' },
+/* ---------- 電腦角色（個性與情境對話，純演出不影響遊戲） ---------- */
+const AI_CHARACTERS = [
+  { name: '旺來伯', emoji: '🍍', lines: { // 台語老江湖
+    greet: ['少年仔，來啦來啦～', '呷飽沒？來摸兩圈！'],
+    pong: ['碰！這款好料我怎會放過', '歹勢啦，碰！'],
+    chi: ['呷一下無要緊乎？', '吃！嘸通見怪～'],
+    kong: ['槓落去！氣魄啦！', '哈！四支全到齊'],
+    flower: ['喔～有花有春！', '花開富貴啦！'],
+    win: ['哈哈，緊來算台！', '少年仔，學著點～'],
+    tsumo: ['自摸啦！緊來看！', '天公疼憨人～自摸！'],
+    lose: ['唉唷，煞去了了…', '這張嘸應該打的啦…'],
+    draw: ['流局喔，摸心酸的', '嘸魚蝦也好…再來！'],
+    dice: ['骰仔有靈聖喔！', '你看這手氣！'],
+    mock: ['啊你是在胡啥啦！', '憨囝仔，詐胡是要賠錢的餒'],
+  }},
+  { name: '阿花姨', emoji: '🌺', lines: { // 菜市場戰神，愛碎念
+    greet: ['我跟你說，我今天手氣特別好', '等我一下，滷肉還在爐上'],
+    pong: ['碰！這我要的啦', '碰起來！別跟我搶'],
+    chi: ['吃啊，不吃白不吃', '這張我等很久了餒'],
+    kong: ['槓！嚇到了齁', '四張咧，看到沒？'],
+    flower: ['花喔？我最愛花了', '又補花，美賣美賣'],
+    win: ['哎唷胡了啦！快點算錢', '我就說我今天手氣好吧！'],
+    tsumo: ['自摸！通通拿錢來', '菜市場殺價都沒這麼爽！'],
+    lose: ['夭壽喔放槍了…', '氣死我了，這局不算啦（開玩笑的）'],
+    draw: ['摸半天摸個寂寞', '流局？我滷肉都滷好了'],
+    dice: ['看我的骰！旺喔！', '這骰數，發啦！'],
+    mock: ['嘖嘖，詐胡喔，丟臉丟到家', '看清楚再喊啦！'],
+  }},
+  { name: '雀聖', emoji: '🐦', lines: { // 高深莫測的宗師
+    greet: ['牌品即人品。', '靜心，方能聽牌。'],
+    pong: ['碰。此乃天意。', '碰。時機已至。'],
+    chi: ['吃。順勢而為。', '牌河之流，取之有道。'],
+    kong: ['槓。四象歸一。', '槓上，或有花開。'],
+    flower: ['花自飄零水自流。', '一花一世界。'],
+    win: ['勝負，早在十巡前已定。', '承讓。'],
+    tsumo: ['自摸。萬象歸心。', '此牌，本座等了三巡。'],
+    lose: ['大意了。', '牌局如人生，起落無常。'],
+    draw: ['無勝無敗，亦是一局。', '流局，天不欲戰。'],
+    dice: ['骰運通天。', '此數，吉。'],
+    mock: ['心浮氣躁，故有此敗。', '詐胡者，戒。'],
+  }},
+  { name: '紅中俠', emoji: '🀄', lines: { // 中二武俠
+    greet: ['紅中俠參上！今日必雪前恥！', '江湖險惡，牌桌更甚！'],
+    pong: ['碰！接我這招！', '哼，天下武功唯快不破！'],
+    chi: ['吃！此乃借力打力！', '多謝施主贈牌！'],
+    kong: ['開槓！見識我的絕學！', '四連斬！'],
+    flower: ['花蝴蝶步法！', '踏花歸去馬蹄香！'],
+    win: ['勝負已分！承讓承讓！', '此役必載入江湖史冊！'],
+    tsumo: ['自摸！天助我也！', '哈哈哈！氣運在我！'],
+    lose: ['嗚呼！中計了！', '此仇不報非君子！'],
+    draw: ['平手？下回再戰！', '勝負未分，來日方長！'],
+    dice: ['骰出驚天之數！', '此乃天命！'],
+    mock: ['詐胡？武林大忌！', '年輕人，莫要心急！'],
+  }},
+  { name: '發財哥', emoji: '💰', lines: { // 滿腦子錢
+    greet: ['各位！今天誰要發財？', '本金帶夠沒？哈哈！'],
+    pong: ['碰！穩賺不賠！', '這張是績優股，碰！'],
+    chi: ['吃！低買高賣！', '這波我抄底！'],
+    kong: ['槓！翻倍再翻倍！', '梭哈！全押！'],
+    flower: ['花牌就是股利！', '被動收入又進帳！'],
+    win: ['財富自由！就是現在！', '收租啦各位～'],
+    tsumo: ['自摸！漲停板！', '這局年化報酬率爆表！'],
+    lose: ['崩盤了崩盤了…', '這是計畫性虧損…對，計畫性的'],
+    draw: ['橫盤整理，下局突破', '沒賺沒賠，手續費都省了'],
+    dice: ['開盤大吉！', '這骰數，牛市啊！'],
+    mock: ['詐胡跟內線交易一樣母湯！', '違約交割囉～'],
+  }},
+  { name: '骰神', emoji: '🎲', lines: { // 迷信賭徒
+    greet: ['今天黃道吉日，宜打牌', '我拜過了，這局穩的'],
+    pong: ['碰！運勢來了擋不住！', '碰！這是註定的'],
+    chi: ['吃！命中帶吃！', '流年利我！'],
+    kong: ['槓！勢不可擋！', '槓出一片天！'],
+    flower: ['花開見喜！', '這花是幸運之兆！'],
+    win: ['我就說我拜過了吧！', '運！全是運！'],
+    tsumo: ['自摸！神明保佑！', '擲筊擲出來的自摸！'],
+    lose: ['等等，我再去拜一下…', '水逆！一定是水逆！'],
+    draw: ['天機未到，再等等', '這局神明在休息'],
+    dice: ['看到沒！這就是骰神！', '骰出吉數，大殺四方！'],
+    mock: ['亂喊胡會倒楣三年喔', '神明都看不下去了'],
+  }},
+  { name: '月光姐', emoji: '🌙', lines: { // 優雅淡定
+    greet: ['晚上好，各位。', '願今晚牌局如月色般美好。'],
+    pong: ['碰。失禮了。', '這張，我便收下了。'],
+    chi: ['吃。謝謝你。', '正好缺這張呢。'],
+    kong: ['槓。難得的緣分。', '四張齊聚，像滿月呢。'],
+    flower: ['花好月圓。', '這花，真美。'],
+    win: ['承讓了，各位。', '月滿則盈，胡了。'],
+    tsumo: ['自摸。月光眷顧。', '靜靜地，就胡了呢。'],
+    lose: ['月有陰晴圓缺，難免的。', '無妨，下局再來。'],
+    draw: ['流局也有流局的美。', '就當賞了一輪月吧。'],
+    dice: ['月色與骰運都正好。', '好兆頭。'],
+    mock: ['急躁了呢。', '深呼吸，再看一次牌吧。'],
+  }},
+  { name: '海底撈', emoji: '🎣', lines: { // 釣魚梗大王
+    greet: ['今天來釣大魚！', '魚餌上好了，開局！'],
+    pong: ['碰！上鉤了！', '這尾我要了！'],
+    chi: ['吃！願者上鉤！', '收線收線～'],
+    kong: ['槓！一網打盡！', '四尾一起收！'],
+    flower: ['撈到水草…不對，是花！', '副產物也不錯！'],
+    win: ['大豐收！收竿！', '這尾夠肥！'],
+    tsumo: ['海底撈月！撈到了！', '自摸！魚獲滿艙！'],
+    lose: ['線斷了…', '魚跑了啦！'],
+    draw: ['今天魚不咬餌', '空軍！明天再來'],
+    dice: ['浪頭正好！', '出海吉日！'],
+    mock: ['喊胡前先看魚上鉤沒啊', '空鉤起竿，糗了吧'],
+  }},
+  { name: '龜速伯', emoji: '🐢', lines: { // 慢性子
+    greet: ['等等我…讓我坐好…', '不急，牌會等人的…'],
+    pong: ['等一下…碰。', '慢慢來…碰。'],
+    chi: ['讓我想想…吃。', '嗯…吃好了。'],
+    kong: ['這個…槓吧。', '不急不急…槓。'],
+    flower: ['喔？有花？我看看…', '慢工出細活，補花～'],
+    win: ['咦，我胡了？', '慢慢打…也是會胡的。'],
+    tsumo: ['等等…這是自摸吧？', '龜兔賽跑，懂？'],
+    lose: ['唉呀…放槍了嗎…', '太急了，我太急了…'],
+    draw: ['流局了？我才剛熱身…', '呼…終於可以休息了'],
+    dice: ['骰子…滾慢一點…', '好數字，不錯不錯…'],
+    mock: ['你看，急就出錯了吧…', '像我這樣慢慢確認嘛…'],
+  }},
+  { name: '小辣椒', emoji: '🌶️', lines: { // 嗆辣直球
+    greet: ['就這陣容？贏定了', '手下不留情喔，先說'],
+    pong: ['碰！不好意思喔～', '這張？我的！'],
+    chi: ['吃！謝謝招待～', '送到嘴邊哪有不吃的'],
+    kong: ['槓！怕了吧！', '四張！服不服？'],
+    flower: ['連花都站我這邊', '美的東西都歸我'],
+    win: ['太弱了吧～胡了！', '就說贏定了嘛！'],
+    tsumo: ['自摸！自己看台數！', '完美！無可挑剔！'],
+    lose: ['嘖！算你厲害…這次啦', '哼，讓你一次'],
+    draw: ['無聊！都不給胡', '你們防太緊了吧！'],
+    dice: ['看到沒？氣勢！', '骰子也懂看人臉色'],
+    mock: ['噗，詐胡？笑死', '衝動是魔鬼～'],
+  }},
 ];
 
 /* 牌背配色（面、深、邊框） */
@@ -210,7 +367,7 @@ function onHostStart() {
   applyTileBack(optBack);
 
   // 組出 4 個座位（不足補 AI，給創意名字）
-  const aiPool = AI_PROFILES.slice().sort(() => Math.random() - 0.5);
+  const aiPool = AI_CHARACTERS.slice().sort(() => Math.random() - 0.5);
   const seats = [];
   seatOwners = [];
   for (let i = 0; i < 4; i++) {
@@ -301,11 +458,13 @@ function onJoinRoom() {
 
 function clientHandleHostMessage(msg) {
   switch (msg.type) {
-    case 'lobby':
-      lobbyPlayers = msg.players.map(p => ({ seat: p.seat, name: p.name, kind: p.isHost ? 'host' : 'client' }));
+    case 'lobby': {
+      lobbyPlayers = [null, null, null, null];
+      msg.players.forEach(p => { lobbyPlayers[p.seat] = { seat: p.seat, name: p.name, kind: p.isHost ? 'host' : 'client' }; });
       mySeat = msg.yourSeat;
       renderLobby();
       break;
+    }
     case 'roomFull':
       toast('房間已滿'); break;
     case 'gameStart':
@@ -415,6 +574,20 @@ function renderView(view) {
     else if (/吃$/.test(msg)) Sound.chi();
     else if (/槓$/.test(msg)) Sound.kong();
     else if (totalDiscards > sndPrevDiscards) Sound.discard();
+
+    // ---- 電腦角色情境對話 ----
+    const actor = view.seats.findIndex(s => msg.startsWith(s.name + ' '));
+    if (/碰$/.test(msg)) maybeSpeak(actor, 'pong', .6);
+    else if (/吃$/.test(msg)) maybeSpeak(actor, 'chi', .6);
+    else if (/槓$/.test(msg)) maybeSpeak(actor, 'kong', .75);
+    else if (/補花 \d+ 張$/.test(msg)) maybeSpeak(actor, 'flower', .55);
+    else if (msg === '開始新局') {
+      // 開局：骰運好的莊家吹噓；其他 AI 隨機寒暄
+      if (view.diceBonusName) maybeSpeak(view.dealer, 'dice', .95);
+      view.seats.forEach((s, i) => {
+        if (s.isAI && i !== view.dealer) setTimeout(() => maybeSpeak(i, 'greet', .3), 300 + i * 500);
+      });
+    }
     sndPrevMsg = msg;
   } else if (totalDiscards > sndPrevDiscards) {
     Sound.discard();
@@ -460,19 +633,27 @@ function renderSeat(s, pos, seat, view) {
       handEl.appendChild(el);
     }
   } else {
-    // 別人：牌背
+    // 別人：牌背（帶序號，讓整排以階梯錯位排成平行四邊形）
     const n = s.handCount != null ? s.handCount : (s.hand ? s.hand.length : 0);
-    for (let i = 0; i < n; i++) handEl.appendChild(makeBackTile(pos));
+    for (let i = 0; i < n; i++) handEl.appendChild(makeBackTile(pos, i));
   }
 
-  // 亮出的面子
+  // 亮出的面子（別人的暗槓 hidden=true → 顯示四張牌背）
   const meldEl = area.querySelector('.seat-melds');
   meldEl.innerHTML = '';
   for (const m of s.melds) {
     const g = document.createElement('div');
     g.className = 'meld';
-    for (const t of m.tiles) g.appendChild(makeTile(t, false));
-    if (m.type === 'kong' && m.concealed) g.classList.add('concealed-kong');
+    if (m.hidden) {
+      for (let k = 0; k < 4; k++) {
+        const b = document.createElement('div');
+        b.className = 'tile tile-back meld-back';
+        g.appendChild(b);
+      }
+    } else {
+      for (const t of m.tiles) g.appendChild(makeTile(t, false));
+      if (m.type === 'kong' && m.concealed) g.classList.add('concealed-kong');
+    }
     meldEl.appendChild(g);
   }
 
@@ -491,36 +672,50 @@ function renderSeat(s, pos, seat, view) {
 function renderDiscardPool(view) {
   const pool = document.getElementById('discard-pool');
   pool.innerHTML = '';
-  // 顯示每家棄牌（依方位分區）
+  // 顯示每家棄牌（依方位分區）；最新打出的那張改放中央放大顯示
   for (let i = 0; i < 4; i++) {
     const seat = (view.you + i) % 4;
     const pos = SEAT_LABELS[i];
     const zone = document.createElement('div');
     zone.className = 'discard-zone discard-' + pos;
-    for (const t of view.seats[seat].discards) {
-      const tile = makeTile(t, false);
+    const discards = view.seats[seat].discards;
+    const skipLast = view.lastDiscard && view.lastDiscard.from === seat;
+    const count = skipLast ? discards.length - 1 : discards.length;
+    for (let k = 0; k < count; k++) {
+      const tile = makeTile(discards[k], false);
       tile.classList.add('discarded');
       zone.appendChild(tile);
-    }
-    // 標記最後打出的牌
-    if (view.lastDiscard && view.lastDiscard.from === seat && zone.lastChild) {
-      zone.lastChild.classList.add('just-discarded');
     }
     pool.appendChild(zone);
   }
 
-  // 中央三顆骰子（每局開始由莊家擲，決定東風位與骰運）
+  // 中央：剛打出的牌（放大）＋ 骰子
+  const center = document.createElement('div');
+  center.className = 'pool-center';
+  if (view.lastDiscard) {
+    const big = makeTile(view.lastDiscard.tile, false);
+    big.classList.add('center-discard');
+    // 防洩漏：同一張棄牌重繪（例如有人考慮吃碰後放棄）不重播動畫，
+    // 避免多閃一下讓其他人察覺有人能吃碰
+    const totalD = view.seats.reduce((a, s) => a + (s.discards ? s.discards.length : 0), 0);
+    const key = view.lastDiscard.from + ':' + view.lastDiscard.tile + ':' + totalD;
+    if (key === prevCenterKey) big.style.animation = 'none';
+    prevCenterKey = key;
+    center.appendChild(big);
+  }
   if (view.dice) {
     const DIE_CH = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
     const area = document.createElement('div');
-    area.className = 'dice-area';
+    area.className = 'dice-area-inner';
     area.innerHTML = '<div class="dice-row">' + view.dice.map(d =>
       `<span class="die ${d === 1 || d === 4 ? 'die-red' : ''}">${DIE_CH[d - 1]}</span>`).join('') + '</div>'
-      + (view.diceBonusName ? `<div class="dice-bonus">${view.diceBonusName}${
-          view.diceBonusName === '豹子' ? '（籌碼×3）' : view.diceBonusName === '骰歸' ? '（+2台）' : '（+1台）'
-        }</div>` : '');
-    pool.appendChild(area);
+      + (view.diceBonusName ? `<div class="dice-bonus">${view.diceBonusName}（${
+          [view.diceBonusTai > 0 ? `+${view.diceBonusTai}台` : '',
+           view.diceBonusMult > 1 ? `籌碼×${view.diceBonusMult}` : ''].filter(Boolean).join('、')
+        }）</div>` : '');
+    center.appendChild(area);
   }
+  pool.appendChild(center);
 }
 
 /* ---------- 牌的 DOM ---------- */
@@ -539,9 +734,10 @@ function makeTile(t, clickable, onClick) {
   }
   return el;
 }
-function makeBackTile(pos) {
+function makeBackTile(pos, index = 0) {
   const el = document.createElement('div');
   el.className = 'tile tile-back tile-back-' + pos;
+  el.style.setProperty('--i', index);
   return el;
 }
 
@@ -630,7 +826,7 @@ function showTurnActions(payload) {
   bar.style.display = 'flex';
 
   const a = payload.actions;
-  if (a.tsumo) addActionBtn(bar, '自摸胡 🎉', 'win', () => sendAction({ type: 'tsumo' }));
+  // 自摸不提示：玩家須自行判斷並按右下角常駐「胡」鈕
   if (a.concealedKongs && a.concealedKongs.length) {
     for (const t of a.concealedKongs) {
       addActionBtn(bar, '暗槓 ' + tileName(t), 'kong', () => sendAction({ type: 'concealedKong', tile: t }));
@@ -648,9 +844,11 @@ function showTurnActions(payload) {
 }
 
 function showClaimOffer(payload) {
-  currentClaim = payload;
-  startUiTimer(15); // 吃碰槓胡 反應倒數（與 host 端 CLAIM_TIMEOUT 一致）
   const opt = payload.options;
+  // 胡牌永不提示；若（防禦性）沒有任何可見選項就什麼都不顯示
+  if (!opt.pong && !opt.kong && !opt.chi) return;
+  currentClaim = payload;
+  startUiTimer(15); // 吃碰槓 反應倒數（與 host 端 CLAIM_TIMEOUT 一致）
   const bar = document.getElementById('action-bar');
   bar.innerHTML = '';
   bar.style.display = 'flex';
@@ -661,7 +859,6 @@ function showClaimOffer(payload) {
   label.textContent = '「' + tileName(tile) + '」→ ';
   bar.appendChild(label);
 
-  if (opt.hu) addActionBtn(bar, '胡 🎉', 'win', () => sendClaim({ action: 'hu' }));
   if (opt.kong) addActionBtn(bar, '槓', 'kong', () => sendClaim({ action: 'kong' }));
   if (opt.pong) addActionBtn(bar, '碰', 'pong', () => sendClaim({ action: 'pong' }));
   if (opt.chi && opt.chiOptions) {
@@ -727,10 +924,70 @@ function tilesRowHTML(tiles, highlightTile) {
 }
 
 function showHandOver(payload) {
-  const modal = document.getElementById('result-modal');
-  const body = document.getElementById('result-body');
   lastHandOver = payload;
   clearActions();
+  // ---- 電腦角色勝負對話 ----
+  if (payload.result === 'win') {
+    (payload.winners || []).forEach(w => maybeSpeak(w.seat, w.selfDraw ? 'tsumo' : 'win', .95));
+    if (payload.from != null) maybeSpeak(payload.from, 'lose', .9);
+  } else if (payload.result === 'draw' && lastView) {
+    const ais = lastView.seats.map((s, i) => s.isAI ? i : -1).filter(i => i >= 0);
+    if (ais.length) maybeSpeak(ais[Math.floor(Math.random() * ais.length)], 'draw', .8);
+  } else if (payload.result === 'falseHu' && lastView) {
+    const ais = lastView.seats.map((s, i) => (s.isAI && i !== payload.offender) ? i : -1).filter(i => i >= 0);
+    if (ais.length) maybeSpeak(ais[Math.floor(Math.random() * ais.length)], 'mock', .95);
+  }
+  // 胡牌超過 2 台 → 先全螢幕浮現牌型，再進結算
+  if (payload.result === 'win') {
+    const winners = payload.winners || [];
+    const best = winners.reduce((a, w) => (!a || w.score.total > a.score.total) ? w : a, null);
+    Sound.hu(winners.length === 1 && winners[0].selfDraw);
+    if (best && best.score.total > 2) {
+      showWinSplash(payload, best, () => renderHandOverModal(payload));
+      return;
+    }
+  }
+  renderHandOverModal(payload);
+}
+
+/* ---------- 全螢幕牌型宣告（>2台） ---------- */
+let splashTimer = null;
+function showWinSplash(payload, winner, done) {
+  const el = document.getElementById('win-splash');
+  const seatName = (i) => lastView ? lastView.seats[i].name : '玩家' + (i + 1);
+  // 取台數最高的前 4 個牌型
+  const types = winner.score.items.slice()
+    .sort((a, b) => b.tai - a.tai)
+    .slice(0, 4);
+  el.querySelector('.splash-who').textContent =
+    (payload.multiShot ? payload.multiShot + '　' : '') +
+    seatName(winner.seat) + (winner.selfDraw ? '　自摸' : '　胡牌');
+  el.querySelector('.splash-types').innerHTML = types.map((t, i) =>
+    `<div class="splash-type" style="animation-delay:${0.25 + i * 0.32}s">${escapeHtml(t.name)}</div>`).join('');
+  const mult = winner.score.multiplier || 1;
+  el.querySelector('.splash-tai').textContent =
+    `${winner.score.total} 台` + (mult > 1 ? `　×${mult}` : '');
+
+  el.style.display = 'flex';
+  el.classList.remove('splash-play');
+  void el.offsetWidth; // 重啟動畫
+  el.classList.add('splash-play');
+
+  const finish = () => {
+    clearTimeout(splashTimer);
+    el.onclick = null;
+    el.classList.remove('splash-play');
+    el.style.display = 'none';
+    done();
+  };
+  el.onclick = finish;                       // 點擊跳過
+  const holdMs = 1600 + types.length * 320;  // 依牌型數量停留
+  splashTimer = setTimeout(finish, holdMs);
+}
+
+function renderHandOverModal(payload) {
+  const modal = document.getElementById('result-modal');
+  const body = document.getElementById('result-body');
   const seatName = (i) => lastView ? lastView.seats[i].name : '玩家' + (i + 1);
   const di = payload.baseDi || 30, taiV = payload.baseTai || 10;
 
@@ -749,20 +1006,23 @@ function showHandOver(payload) {
     `;
   } else {
     const winners = payload.winners || [];
-    Sound.hu(winners.length === 1 && winners[0].selfDraw);
     const blocks = winners.map(w => {
       const s = w.score;
       const items = s.items.map(it => `<li>${it.name} <b>${it.tai}</b> 台</li>`).join('');
       const way = w.selfDraw ? '自摸' : ('胡 ' + escapeHtml(seatName(payload.from)) + ' 放的牌');
       const mult = s.multiplier || 1;
       const chips = (di + s.total * taiV) * mult;
+      // 非莊家自摸：莊家那份加付莊家/連莊台
+      const payNote = w.selfDraw
+        ? (s.dealerPay ? `（散家各付 ${s.basePay}、莊家付 <b>${s.dealerPay}</b>）` : '（三家各付）')
+        : '';
       const meldTiles = (w.melds || []).flatMap(m => m.tiles);
       return `
         <div class="winner-block">
           <h3>🎉 ${escapeHtml(seatName(w.seat))}　<span class="win-way">${way}</span></h3>
           <div class="reveal-row">${tilesRowHTML(w.hand)}${meldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(meldTiles)}` : ''}<span class="reveal-sep">＋</span>${tilesRowHTML([w.winTile], w.winTile)}</div>
           <div class="tai-total">共 ${s.total} 台${mult > 1 ? `　<span class="mult">豹子 ×${mult}</span>` : ''}
-            <span class="chip-line">底 ${di} + ${s.total}×${taiV}${mult > 1 ? `×${mult}` : ''} = <b>${chips}</b>${w.selfDraw ? '（三家各付）' : ''}</span></div>
+            <span class="chip-line">底 ${di} + ${s.total}×${taiV}${mult > 1 ? `×${mult}` : ''} = <b>${chips}</b>${payNote}</span></div>
           <ul class="tai-items">${items || '<li>無台（屁胡）</li>'}</ul>
         </div>`;
     }).join('');
