@@ -47,8 +47,60 @@ h1, h2, h3 {
 
 /* ---------- 畫面切換 ----------
  * 高度用 dvh（動態視口）：手機/平板瀏覽器工具列不會吃掉底部的行動列 */
-.screen { display: none; width: 100vw; height: 100vh; height: 100dvh; }
+.screen { display: none; width: 100vw; height: 100vh; height: 100dvh; position: relative; }
 .screen.active { display: flex; align-items: center; justify-content: center; }
+
+/* ============================================================
+ * 大廳/等待室動態背景：飄浮麻將牌＋祥雲＋金塵
+ * ============================================================ */
+.bg-decor {
+  position: absolute; inset: 0; overflow: hidden;
+  pointer-events: none; z-index: 0;
+}
+.lobby-card, .room-card { position: relative; z-index: 1; }
+
+/* 飄浮的麻將牌：由下往上緩緩飄，帶輕微旋轉與橫移 */
+.float-tile {
+  position: absolute; top: 105%;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(165deg, #fffef9, #efe8d5);
+  border: 1px solid #cbc5ae;
+  box-shadow: 0 4px 12px rgba(0,0,0,.35);
+  opacity: 0; will-change: transform;
+  animation: tileFloat var(--dur, 24s) linear var(--delay, 0s) infinite;
+}
+@keyframes tileFloat {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  8%   { opacity: .17; }
+  80%  { opacity: .15; }
+  100% { transform: translate(var(--drift, 0px), -130vh) rotate(var(--rot, 20deg)); opacity: 0; }
+}
+
+/* 金塵光點 */
+.spark {
+  position: absolute; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px 2px rgba(232,200,106,.45);
+  opacity: 0;
+  animation: twinkle var(--tw, 3s) ease-in-out var(--twd, 0s) infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0; transform: scale(.4); }
+  50% { opacity: .75; transform: scale(1); }
+}
+
+/* 祥雲：線描金雲緩緩橫越 */
+.cloud { position: absolute; color: rgba(232,200,106,.16); }
+.cloud-a { top: 12%; left: -240px; width: 230px; animation: cloudDrift 65s linear infinite; }
+.cloud-b { top: 68%; left: -340px; width: 330px; animation: cloudDrift 90s linear 18s infinite; }
+.cloud-svg { width: 100%; height: auto; }
+@keyframes cloudDrift { to { transform: translateX(calc(100vw + 420px)); } }
+
+/* 降低動態偏好：全部停用 */
+@media (prefers-reduced-motion: reduce) {
+  .float-tile, .spark, .cloud { animation: none; opacity: .08; }
+}
 
 /* ---------- 大廳 ---------- */
 #lobby-screen, #room-screen {
@@ -378,11 +430,62 @@ input[type=text] {
 .tile.discarded { width: 26px; height: 34px; font-size: 11px; opacity: .95; }
 .tile.just-discarded { box-shadow: 0 0 10px var(--gold); border-color: var(--gold); }
 
-/* ---------- 中央區：剛打出的牌（放大）＋骰子 ---------- */
+/* ---------- 中央區：剛打出的牌（放大）＋骰盅 ---------- */
 .pool-center {
   grid-row: 2; grid-column: 2;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; pointer-events: none; align-self: center; justify-self: center;
+  padding-bottom: 118px; /* 讓中央牌位於骰盅上方 */
+}
+
+/* 圓形玻璃骰盅（絕對置中，常駐不重繪） */
+#dice-glass {
+  position: absolute; left: 50%; top: 55%;
+  transform: translate(-50%, -50%);
+  width: 112px; height: 112px; border-radius: 50%;
+  pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255,255,255,.30), rgba(255,255,255,.05) 42%),
+    radial-gradient(circle at center, rgba(0,0,0,.10), rgba(0,0,0,.30));
+  border: 1.5px solid rgba(255,255,255,.35);
+  box-shadow:
+    0 0 0 3px rgba(232,200,106,.35),           /* 金框 */
+    inset 0 -8px 18px rgba(0,0,0,.35),          /* 罩內底部陰影 */
+    inset 0 6px 10px rgba(255,255,255,.12),     /* 罩頂反光 */
+    0 8px 22px rgba(0,0,0,.45);                 /* 落地陰影 */
+}
+.glass-shine {
+  position: absolute; top: 12px; left: 20px;
+  width: 34px; height: 18px; border-radius: 50%;
+  background: rgba(255,255,255,.35);
+  filter: blur(3px);
+  transform: rotate(-24deg);
+}
+.glass-dice { display: flex; gap: 2px; }
+.glass-dice .die {
+  font-size: 1.75rem; background: none;
+}
+.glass-dice .die-dim { color: rgba(255,255,255,.28); }
+.glass-bonus {
+  color: var(--gold); font-weight: 800; font-size: .68rem;
+  margin-top: 2px; text-align: center; line-height: 1.2;
+  text-shadow: 0 1px 3px rgba(0,0,0,.6);
+}
+/* 翻滾中：骰子在罩內劇烈跳動 */
+#dice-glass.rolling .glass-dice { animation: diceTumble .16s linear infinite; }
+@keyframes diceTumble {
+  0%   { transform: translate(-3px, 2px) rotate(-8deg); }
+  25%  { transform: translate(3px, -3px) rotate(6deg); }
+  50%  { transform: translate(-2px, -2px) rotate(-5deg); }
+  75%  { transform: translate(3px, 2px) rotate(8deg); }
+  100% { transform: translate(-3px, 2px) rotate(-8deg); }
+}
+/* 定格：整個骰盅輕彈一下 */
+#dice-glass.settled { animation: glassSettle .4s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes glassSettle {
+  0% { transform: translate(-50%, -50%) scale(1.12); }
+  100% { transform: translate(-50%, -50%) scale(1); }
 }
 .tile.center-discard {
   width: 48px; height: 64px; font-size: 22px;

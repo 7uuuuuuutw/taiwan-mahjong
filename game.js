@@ -73,6 +73,7 @@ class GameEngine {
    * 骰數和決定東風位（正花「春/梅」對應的座位）；
    * 全紅(皆1或4) 胡牌+1台、骰歸(等差1) +2台、豹子(三同) 籌碼×3 */
   rollDice() {
+    this.rollId = (this.rollId || 0) + 1; // 供前端辨識「新的一次擲骰」以播放翻滾動畫
     const d = () => 1 + Math.floor(this.rng() * 6);
     this.dice = [d(), d(), d()];
     const sum = this.dice[0] + this.dice[1] + this.dice[2];
@@ -788,7 +789,10 @@ class GameEngine {
       wallLeft: this.wall ? Math.max(0, this.drawableCount()) : 0, // 顯示「可摸張數」
       lastDiscard: this.lastDiscard,
       dice: this.dice || null,
+      rollId: this.rollId || 0,
       diceBonusName: this.diceBonus ? this.diceBonus.name : null,
+      diceBonusTai: this.diceBonus ? this.diceBonus.tai : 0,
+      diceBonusMult: this.diceBonus ? this.diceBonus.mult : 1,
       diceBonusTai: this.diceBonus ? this.diceBonus.tai : 0,
       diceBonusMult: this.diceBonus ? this.diceBonus.mult : 1,
       eastSeat: (this.eastSeat != null) ? this.eastSeat : this.dealer,

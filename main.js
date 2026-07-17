@@ -23,6 +23,41 @@ function show(screenId) {
   document.getElementById(screenId).classList.add('active');
 }
 
+/* ---------- 大廳/等待室動態背景（麻將氛圍） ----------
+ * 飄浮的麻將牌（重用遊戲牌面）＋祥雲＋金塵，純裝飾不擋操作 */
+function decorateBackground(screenId) {
+  const screen = document.getElementById(screenId);
+  if (!screen || screen.querySelector('.bg-decor')) return;
+  const d = document.createElement('div');
+  d.className = 'bg-decor';
+  const TILES = ['m1', 'm5', 'm9', 'p1', 'p5', 'p9', 's1', 's5', 's8', 'z1', 'z5', 'z6', 'z7', 'f1', 'f5', 'p7'];
+  let html = '';
+  // 飄浮麻將牌
+  for (let i = 0; i < 12; i++) {
+    const t = TILES[Math.floor(Math.random() * TILES.length)];
+    const size = 34 + Math.random() * 42;
+    const dur = (18 + Math.random() * 22).toFixed(1);
+    html += `<div class="float-tile" style="left:${(Math.random() * 100).toFixed(1)}%;` +
+      `width:${size | 0}px;height:${(size * 1.35) | 0}px;font-size:${(size * .45) | 0}px;` +
+      `--dur:${dur}s;--delay:${(-Math.random() * dur).toFixed(1)}s;` +
+      `--rot:${(Math.random() * 80 - 40) | 0}deg;--drift:${(Math.random() * 140 - 70) | 0}px">` +
+      tileFaceHTML(t) + `</div>`;
+  }
+  // 金塵光點
+  for (let i = 0; i < 16; i++) {
+    html += `<span class="spark" style="left:${(Math.random() * 100).toFixed(1)}%;top:${(Math.random() * 100).toFixed(1)}%;` +
+      `--tw:${(2.2 + Math.random() * 4).toFixed(1)}s;--twd:${(Math.random() * 5).toFixed(1)}s"></span>`;
+  }
+  // 祥雲（線描，緩緩橫移）
+  const cloud = `<svg class="cloud-svg" viewBox="0 0 200 60">
+    <path d="M20 45 q-12 0 -12 -11 q0 -11 12 -11 q2 -12 15 -12 q11 0 15 9 q4 -6 12 -6 q11 0 13 10 q10 0 10 10.5 q0 10.5 -12 10.5 Z" fill="none" stroke="currentColor" stroke-width="2.5"/>
+    <path d="M120 45 q-9 0 -9 -8 q0 -8 9 -8 q2 -9 11 -9 q8 0 11 7 q8 0 9 8 q1 10 -10 10 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+  </svg>`;
+  html += `<div class="cloud cloud-a">${cloud}</div><div class="cloud cloud-b">${cloud}</div>`;
+  d.innerHTML = html;
+  screen.prepend(d);
+}
+
 /* ---------- 大廳按鈕 ---------- */
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-create').onclick = onCreateRoom;
@@ -50,6 +85,10 @@ window.addEventListener('DOMContentLoaded', () => {
   // 首次互動解鎖音訊（瀏覽器自動播放限制）
   const unlock = () => { Sound.resume(); window.removeEventListener('pointerdown', unlock); };
   window.addEventListener('pointerdown', unlock);
+
+  // 大廳與等待室的麻將氛圍動態背景
+  decorateBackground('lobby-screen');
+  decorateBackground('room-screen');
 });
 
 // 音效用：追蹤狀態變化以觸發對應聲音
@@ -671,7 +710,9 @@ function renderSeat(s, pos, seat, view) {
 
 function renderDiscardPool(view) {
   const pool = document.getElementById('discard-pool');
-  pool.innerHTML = '';
+  // 清除棄牌區與中央牌，但保留常駐的骰盅玻璃罩（動畫不被重繪打斷）
+  [...pool.children].forEach(c => { if (c.id !== 'dice-glass') c.remove(); });
+
   // 顯示每家棄牌（依方位分區）；最新打出的那張改放中央放大顯示
   for (let i = 0; i < 4; i++) {
     const seat = (view.you + i) % 4;
@@ -689,7 +730,7 @@ function renderDiscardPool(view) {
     pool.appendChild(zone);
   }
 
-  // 中央：剛打出的牌（放大）＋ 骰子
+  // 中央：剛打出的牌（放大，位於骰盅上方）
   const center = document.createElement('div');
   center.className = 'pool-center';
   if (view.lastDiscard) {
@@ -703,19 +744,77 @@ function renderDiscardPool(view) {
     prevCenterKey = key;
     center.appendChild(big);
   }
-  if (view.dice) {
-    const DIE_CH = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    const area = document.createElement('div');
-    area.className = 'dice-area-inner';
-    area.innerHTML = '<div class="dice-row">' + view.dice.map(d =>
-      `<span class="die ${d === 1 || d === 4 ? 'die-red' : ''}">${DIE_CH[d - 1]}</span>`).join('') + '</div>'
-      + (view.diceBonusName ? `<div class="dice-bonus">${view.diceBonusName}（${
-          [view.diceBonusTai > 0 ? `+${view.diceBonusTai}台` : '',
-           view.diceBonusMult > 1 ? `籌碼×${view.diceBonusMult}` : ''].filter(Boolean).join('、')
-        }）</div>` : '');
-    center.appendChild(area);
-  }
   pool.appendChild(center);
+
+  updateDiceGlass(view, pool);
+}
+
+/* ---------- 中央骰盅：圓形玻璃罩＋擲骰翻滾動畫 ---------- */
+let diceRollTimer = null;
+function updateDiceGlass(view, pool) {
+  const DIE_CH = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+  let glass = document.getElementById('dice-glass');
+  if (!glass) {
+    glass = document.createElement('div');
+    glass.id = 'dice-glass';
+    glass.innerHTML = '<div class="glass-shine"></div><div class="glass-dice"></div><div class="glass-bonus"></div>';
+    pool.appendChild(glass);
+  }
+  const diceEl = glass.querySelector('.glass-dice');
+  const bonusEl = glass.querySelector('.glass-bonus');
+
+  // 尚未擲骰（等莊家）：罩內三顆暗骰待命
+  if (!view.dice) {
+    if (glass.dataset.state !== 'idle') {
+      glass.dataset.state = 'idle';
+      glass.dataset.rollId = '';
+      clearInterval(diceRollTimer);
+      glass.classList.remove('rolling', 'settled');
+      diceEl.innerHTML = '<span class="die die-dim">⚀</span><span class="die die-dim">⚂</span><span class="die die-dim">⚄</span>';
+      bonusEl.textContent = '';
+    }
+    return;
+  }
+
+  // 同一次擲骰重複渲染（發牌/摸打的畫面更新）→ 不重播動畫
+  const rid = String(view.rollId || view.dice.join(','));
+  if (glass.dataset.rollId === rid) return;
+  glass.dataset.rollId = rid;
+  glass.dataset.state = 'rolled';
+
+  // 翻滾動畫：亂數換面約 0.95 秒後定格揭曉
+  clearInterval(diceRollTimer);
+  glass.classList.remove('settled');
+  glass.classList.add('rolling');
+  bonusEl.textContent = '';
+  diceEl.innerHTML = view.dice.map(() => '<span class="die"></span>').join('');
+  const spans = [...diceEl.children];
+  const t0 = performance.now();
+  diceRollTimer = setInterval(() => {
+    spans.forEach(sp => {
+      const v = 1 + Math.floor(Math.random() * 6);
+      sp.textContent = DIE_CH[v - 1];
+      sp.classList.toggle('die-red', v === 1 || v === 4);
+    });
+    if (performance.now() - t0 > 950) {
+      clearInterval(diceRollTimer);
+      view.dice.forEach((v, i) => {
+        spans[i].textContent = DIE_CH[v - 1];
+        spans[i].classList.toggle('die-red', v === 1 || v === 4);
+      });
+      glass.classList.remove('rolling');
+      glass.classList.add('settled');
+      Sound.discard();
+      if (view.diceBonusName) {
+        const parts = [
+          view.diceBonusTai > 0 ? `+${view.diceBonusTai}台` : '',
+          view.diceBonusMult > 1 ? `籌碼×${view.diceBonusMult}` : '',
+        ].filter(Boolean).join('、');
+        bonusEl.textContent = view.diceBonusName + (parts ? `（${parts}）` : '');
+      }
+      setTimeout(() => glass.classList.remove('settled'), 500);
+    }
+  }, 85);
 }
 
 /* ---------- 牌的 DOM ---------- */
