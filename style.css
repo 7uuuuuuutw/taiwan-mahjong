@@ -296,6 +296,11 @@ input[type=text] {
 .seat-left .seat-flowers:not(:empty), .seat-right .seat-flowers:not(:empty) {
   border-right: none; padding-right: 0;
 }
+/* 面子/花牌的牌本身轉 90 度橫躺（整張牌變寬扁，不只文字轉向）。 */
+.seat-left .seat-melds .tile, .seat-left .seat-flowers .tile,
+.seat-right .seat-melds .tile, .seat-right .seat-flowers .tile {
+  transform: rotate(90deg);
+}
 
 /* 花牌與吃碰面子同排並列（省空間），中間用一條細線區隔兩組 */
 .seat-extras {
