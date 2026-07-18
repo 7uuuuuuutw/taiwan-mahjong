@@ -127,6 +127,103 @@ function maybeSpeak(seatIdx, event, chance = 1) {
   showSpeech(seatIdx, lines[Math.floor(Math.random() * lines.length)]);
 }
 
+/** 找一位「非當事人」且真的有這句台詞的 AI 開口評論當事人（不是每個角色都會接這種話題） */
+function maybeCommentOn(subjectSeat, event, chance = 1) {
+  if (!lastView) return;
+  const withLine = lastView.seats
+    .map((s, i) => i)
+    .filter(i => i !== subjectSeat && lastView.seats[i].isAI
+      && charOf(lastView.seats[i].name) && charOf(lastView.seats[i].name).lines[event]);
+  if (!withLine.length || Math.random() > chance) return;
+  const speaker = withLine[Math.floor(Math.random() * withLine.length)];
+  maybeSpeak(speaker, event, 1);
+}
+
+/* ---------- 特殊情境對話（觀察局勢觸發，非每角色皆有，每局各項最多說一次） ---------- */
+let specialFired = new Set();          // 本局已觸發過的項目key
+let specialLastHandSig = null;         // 判斷是否已進入新的一局
+let skipStreak = [0, 0, 0, 0];         // 各家「本該摸牌卻被碰/槓跳過」連續次數
+let lastDiscardFrom = null;            // 追蹤最近一次棄牌者（供判斷碰/槓是否跳過摸牌順位）
+
+function resetSpecialDialogueIfNewHand(view) {
+  const sig = view.seats.reduce((a, s) => a + (s.discards ? s.discards.length : 0), 0);
+  if (specialLastHandSig !== null && sig < specialLastHandSig) {
+    specialFired = new Set();
+    skipStreak = [0, 0, 0, 0];
+    lastDiscardFrom = null;
+  }
+  specialLastHandSig = sig;
+}
+
+/** 碰／槓跳過了誰的摸牌順位？連續跳過同一家 2 次以上，讓他喊一下想摸牌 */
+function trackSkippedDraw(claimerSeat) {
+  if (lastDiscardFrom == null) return;
+  const naturalDrawer = (lastDiscardFrom + 1) % 4;
+  if (claimerSeat === naturalDrawer) { skipStreak[naturalDrawer] = 0; return; }
+  let s = naturalDrawer, guard = 0;
+  while (s !== claimerSeat && guard < 4) {
+    skipStreak[s] = (skipStreak[s] || 0) + 1;
+    if (skipStreak[s] >= 2) {
+      maybeSpeak(s, 'wantToDraw', .85);
+      skipStreak[s] = 0;
+    }
+    s = (s + 1) % 4; guard++;
+  }
+}
+
+/** 逐家檢查各種「看牌局猜牌型／猜運氣」的情境，符合就評論一次（本局內不重複） */
+function checkSpecialDialogue(view) {
+  resetSpecialDialogueIfNewHand(view);
+
+  for (let seat = 0; seat < 4; seat++) {
+    const s = view.seats[seat];
+    const melds = s.melds || [];
+    const discards = s.discards || [];
+
+    // 混一色／清一色跡象：亮出面子 ≥2 組，且花色全同（排除字牌組）
+    const suitedMelds = melds.filter(m => m.tiles && m.tiles.length && isSuited(m.tiles[0]));
+    if (!specialFired.has('flush' + seat) && suitedMelds.length >= 2) {
+      const suits = new Set(suitedMelds.map(m => m.tiles[0][0]));
+      if (suits.size === 1) { specialFired.add('flush' + seat); maybeCommentOn(seat, 'flushWarn', .8); }
+    }
+
+    // 碰碰胡跡象：亮出面子 ≥2 組，全是碰／槓、完全沒有吃
+    const nonChi = melds.filter(m => m.type === 'pong' || m.type === 'kong');
+    const chiMelds = melds.filter(m => m.type === 'chi');
+    if (!specialFired.has('pongpong' + seat) && nonChi.length >= 2 && chiMelds.length === 0) {
+      specialFired.add('pongpong' + seat); maybeCommentOn(seat, 'pongpongWarn', .8);
+    }
+
+    // 頻繁吃：吃 ≥3 次 → 調侃上家餵飽飽
+    if (!specialFired.has('chifeed' + seat) && chiMelds.length >= 3) {
+      specialFired.add('chifeed' + seat); maybeCommentOn(seat, 'chiFeeding', .8);
+    }
+
+    // 門清跡象：牌牆剩 ≤30 張，該家完全沒有吃／碰／明槓（暗槓不影響門清）
+    const hasOpenMeld = melds.some(m => !m.concealed);
+    if (!specialFired.has('menqing' + seat) && view.wallLeft <= 30 && !hasOpenMeld) {
+      specialFired.add('menqing' + seat); maybeCommentOn(seat, 'menqingWatch', .7);
+    }
+
+    // 連續打出大字（字牌）：最近兩次棄牌都是字牌 → 挖苦運氣不好
+    if (!specialFired.has('honor' + seat) && discards.length >= 2) {
+      const lastTwo = discards.slice(-2);
+      if (lastTwo.every(t => t[0] === 'z')) { specialFired.add('honor' + seat); maybeCommentOn(seat, 'honorBadLuck', .8); }
+    }
+
+    // 連續兩回合打出同一張牌：推測摸進同一張，運氣很差
+    if (!specialFired.has('same' + seat) && discards.length >= 2) {
+      const lastTwo = discards.slice(-2);
+      if (lastTwo[0] === lastTwo[1]) { specialFired.add('same' + seat); maybeCommentOn(seat, 'sameTileBadLuck', .75); }
+    }
+
+    // 補花手氣：單局補花 ≥3 張
+    if (!specialFired.has('flowerlucky' + seat) && (s.flowers || []).length >= 3) {
+      specialFired.add('flowerlucky' + seat); maybeCommentOn(seat, 'flowerLucky', .8);
+    }
+  }
+}
+
 /* ============================================================
  * 開房（HOST）
  * ============================================================ */
@@ -274,6 +371,7 @@ const AI_CHARACTERS = [
     draw: ['摸半天摸個寂寞', '流局？我滷肉都滷好了'],
     dice: ['看我的骰！旺喔！', '這骰數，發啦！'],
     mock: ['嘖嘖，詐胡喔，丟臉丟到家', '看清楚再喊啦！'],
+    chiFeeding: ['你上家根本在餵你吃到飽耶', '這樣吃法，上家都要跳腳了'],
   }},
   { name: '雀聖', emoji: '🐦', style: 'defensive', lines: { // 高深莫測的宗師
     greet: ['牌品即人品。', '靜心，方能聽牌。'],
@@ -287,6 +385,8 @@ const AI_CHARACTERS = [
     draw: ['無勝無敗，亦是一局。', '流局，天不欲戰。'],
     dice: ['骰運通天。', '此數，吉。'],
     mock: ['心浮氣躁，故有此敗。', '詐胡者，戒。'],
+    flushWarn: ['牌河一色，此局非同小可。', '色調漸純，不可小覷。'],
+    menqingWatch: ['不動聲色，門清氣度。', '靜觀其變，是在等一鳴驚人。'],
   }},
   { name: '紅中俠', emoji: '🀄', style: 'aggressive', lines: { // 中二武俠
     greet: ['紅中俠參上！今日必雪前恥！', '江湖險惡，牌桌更甚！'],
@@ -326,6 +426,7 @@ const AI_CHARACTERS = [
     draw: ['天機未到，再等等', '這局神明在休息'],
     dice: ['看到沒！這就是骰神！', '骰出吉數，大殺四方！'],
     mock: ['亂喊胡會倒楣三年喔', '神明都看不下去了'],
+    honorBadLuck: ['連字都不放過你，水逆無誤', '字牌纏身，該去收驚了'],
   }},
   { name: '月光姐', emoji: '🌙', style: 'defensive', lines: { // 優雅淡定
     greet: ['晚上好，各位。', '願今晚牌局如月色般美好。'],
@@ -339,6 +440,7 @@ const AI_CHARACTERS = [
     draw: ['流局也有流局的美。', '就當賞了一輪月吧。'],
     dice: ['月色與骰運都正好。', '好兆頭。'],
     mock: ['急躁了呢。', '深呼吸，再看一次牌吧。'],
+    menqingWatch: ['始終不動聲色，門清氣度呢。', '這樣的沉靜，是在醞釀大牌吧。'],
   }},
   { name: '海底撈', emoji: '🎣', style: 'bigHand', lines: { // 釣魚梗大王
     greet: ['今天來釣大魚！', '魚餌上好了，開局！'],
@@ -352,6 +454,7 @@ const AI_CHARACTERS = [
     draw: ['今天魚不咬餌', '空軍！明天再來'],
     dice: ['浪頭正好！', '出海吉日！'],
     mock: ['喊胡前先看魚上鉤沒啊', '空鉤起竿，糗了吧'],
+    chiFeeding: ['上家在放飼料喔，吃不停', '這魚餌也太多了吧'],
   }},
   { name: '龜速伯', emoji: '🐢', style: 'defensive', lines: { // 慢性子
     greet: ['等等我…讓我坐好…', '不急，牌會等人的…'],
@@ -365,6 +468,7 @@ const AI_CHARACTERS = [
     draw: ['流局了？我才剛熱身…', '呼…終於可以休息了'],
     dice: ['骰子…滾慢一點…', '好數字，不錯不錯…'],
     mock: ['你看，急就出錯了吧…', '像我這樣慢慢確認嘛…'],
+    wantToDraw: ['喂…輪到我摸牌了沒…', '一直被碰過去，我也想摸牌啊…'],
   }},
   { name: '小辣椒', emoji: '🌶️', style: 'aggressive', lines: { // 嗆辣直球
     greet: ['就這陣容？贏定了', '手下不留情喔，先說'],
@@ -378,6 +482,7 @@ const AI_CHARACTERS = [
     draw: ['無聊！都不給胡', '你們防太緊了吧！'],
     dice: ['看到沒？氣勢！', '骰子也懂看人臉色'],
     mock: ['噗，詐胡？笑死', '衝動是魔鬼～'],
+    sameTileBadLuck: ['同一張連兩次？運氣有夠爛', '這是特別想供養那張牌嗎'],
   }},
   { name: '阿吉師', emoji: '🔥', style: 'aggressive', lines: { // 台式黑手工頭，做事衝
     greet: ['開工開工，今仔日拚一下！', '免驚，我攏嘛全力以赴'],
@@ -417,6 +522,8 @@ const AI_CHARACTERS = [
     draw: ['流局，鯉魚在充電', '沒事，運氣蓄力中'],
     dice: ['骰子聽我的，旺！', '錦鯉骰，必是好數！'],
     mock: ['亂喊胡，鯉魚都嚇跑了', '衝動不是好運，是傻運'],
+    honorBadLuck: ['哎呀，這運氣不太行喔', '字牌連發，鯉魚都幫不了你'],
+    flowerLucky: ['花朵朵開，本鯉的福氣分你一點', '這花運，跟我有得拼喔'],
   }},
   { name: '老棋王', emoji: '♟️', style: 'defensive', lines: { // 下棋式精算，滴水不漏
     greet: ['且慢，棋要一步步下', '穩紮穩打，方能致勝'],
@@ -430,6 +537,8 @@ const AI_CHARACTERS = [
     draw: ['和局，亦是常態', '不輸不贏，穩妥'],
     dice: ['骰數已定，穩住', '此數，可攻可守'],
     mock: ['心急吃不了熱豆腐', '莽撞之舉，不可取'],
+    pongpongWarn: ['碰碰碰，此局意在速戰速決。', '棋風剛猛，碰碰胡無誤。'],
+    distrustAfterFalseHu: ['此人棋風不正，需多留意。', '詐胡一次，信譽已折損。'],
   }},
   { name: '一色痴', emoji: '🎨', style: 'bigHand', lines: { // 執著清一色、寧缺勿濫
     greet: ['今天，一定要清一色', '雜色免談，純色才美'],
@@ -443,6 +552,7 @@ const AI_CHARACTERS = [
     draw: ['流局，純色大業延後', '沒關係，下局繼續追'],
     dice: ['骰子也要有品味', '這數字，有藝術感'],
     mock: ['亂喊胡，毀了我的畫作', '色都沒湊齊喊什麼胡'],
+    flushWarn: ['喔？這手該不會是清一色吧…', '同色來同色去，內行的都懂'],
   }},
   { name: '拼場霸', emoji: '💪', style: 'aggressive', lines: { // 氣勢壓人、逢碰必碰
     greet: ['今天這場，我罩！', '誰要跟我拼一下？'],
@@ -456,6 +566,7 @@ const AI_CHARACTERS = [
     draw: ['流局，算你們好運', '沒關係，氣勢還在'],
     dice: ['骰子也要聽我的！', '這氣勢，穩了！'],
     mock: ['亂喊胡，氣勢都沒了', '拼過頭也要看牌啊'],
+    pongpongWarn: ['喲，全碰？跟我拼氣勢啊', '碰碰胡是吧，看誰先到'],
   }},
   { name: '抓藥仙', emoji: '🌿', style: 'defensive', lines: { // 中藥行老闆，慢工出細活但精準
     greet: ['慢慢來，把脈先', '穩，才是養生之道'],
@@ -469,6 +580,8 @@ const AI_CHARACTERS = [
     draw: ['流局，療程未完', '慢慢調理，別急'],
     dice: ['骰數如脈象，看穩不穩', '此數，氣血通暢'],
     mock: ['心急藥材會抓錯', '亂胡如亂服藥，傷身'],
+    sameTileBadLuck: ['同款藥材連抓兩次，機率不低啊', '這味道，跟上次一模一樣呢'],
+    distrustAfterFalseHu: ['亂喊的藥方，以後要多秤三分', '這帖不準，下次得再三確認'],
   }},
   { name: '衝浪弟', emoji: '🏄', style: 'speed', lines: { // 年輕衝動、抓緊每個機會
     greet: ['浪來了，衝就對了！', '準備好接招沒？'],
@@ -482,6 +595,7 @@ const AI_CHARACTERS = [
     draw: ['流局，風平浪靜', '沒浪，休息一下'],
     dice: ['骰子跟浪一樣難測', '這數，浪頭正好！'],
     mock: ['衝過頭會摔的啦', '看錯浪，這下糗了'],
+    wantToDraw: ['我的浪呢？都被搶走了啦', '一直碰，浪頭都不給我了！'],
   }},
   { name: '賭神嫂', emoji: '🎰', style: 'gambler', lines: { // 拉霸機式豪賭精神
     greet: ['拉霸機都輸我，來吧', '今天要下重注了'],
@@ -495,6 +609,7 @@ const AI_CHARACTERS = [
     draw: ['流局，籌碼先收好', '沒開獎，再等等'],
     dice: ['骰子才是我的主場！', '看這手氣，穩贏！'],
     mock: ['亂梭哈是會傾家蕩產的', '賭也要有分寸啦'],
+    flowerLucky: ['花開連連，這運勢我要下注', '中獎連莊，發財花啊'],
   }},
   { name: '隱士翁', emoji: '🎋', style: 'bigHand', lines: { // 大隱於市，不動則已一動驚人
     greet: ['老夫深居簡出，今日現身', '不鳴則已，一鳴驚人'],
@@ -535,6 +650,7 @@ function onHostStart() {
   const optBack = document.getElementById('opt-back').value;
   const optLigu = document.getElementById('opt-ligu').checked;
   const optDiceBonus = document.getElementById('opt-dicebonus').checked;
+  const optLeopard = document.getElementById('opt-leopard').value;
   applyTileBack(optBack);
 
   // 組出 4 個座位（不足補 AI，給創意名字）
@@ -556,7 +672,7 @@ function onHostStart() {
   engine = new GameEngine(seats, hostEmit, {
     roundWind: 0, dealer: 0, dealerStreak: 0,
     baseDi: optDi, baseTai: optTai, turnLimitMs: optTimerSec * 1000,
-    aiLevel: optAi, ligu: optLigu, diceBonus: optDiceBonus,
+    aiLevel: optAi, ligu: optLigu, diceBonus: optDiceBonus, leopardMode: optLeopard,
   });
 
   // 通知所有 client 進入遊戲（含牌背顏色設定）
@@ -736,6 +852,10 @@ function renderView(view) {
   // 中央棄牌池
   renderDiscardPool(view);
 
+  // 追蹤最近一次棄牌者（供判斷碰/槓是否跳過摸牌順位；lastDiscard 在吃碰解決後會被清空，
+  // 所以只在非空時更新，讓這個值持續到下一次真正的棄牌事件）
+  if (view.lastDiscard) lastDiscardFrom = view.lastDiscard.from;
+
   // ---- 音效觸發 ----
   const totalDiscards = view.seats.reduce((a, s) => a + (s.discards ? s.discards.length : 0), 0);
   const msg = view.stateMessage || '';
@@ -748,10 +868,11 @@ function renderView(view) {
 
     // ---- 電腦角色情境對話 ----
     const actor = view.seats.findIndex(s => msg.startsWith(s.name + ' '));
-    if (/碰$/.test(msg)) maybeSpeak(actor, 'pong', .6);
-    else if (/吃$/.test(msg)) maybeSpeak(actor, 'chi', .6);
-    else if (/槓$/.test(msg)) maybeSpeak(actor, 'kong', .75);
+    if (/碰$/.test(msg)) { maybeSpeak(actor, 'pong', .6); trackSkippedDraw(actor); }
+    else if (/吃$/.test(msg)) { maybeSpeak(actor, 'chi', .6); trackSkippedDraw(actor); }
+    else if (/槓$/.test(msg)) { maybeSpeak(actor, 'kong', .75); trackSkippedDraw(actor); }
     else if (/補花 \d+ 張$/.test(msg)) maybeSpeak(actor, 'flower', .55);
+    else if (/摸牌$/.test(msg)) { if (actor >= 0) skipStreak[actor] = 0; } // 正常摸到牌，歸零連續被跳過次數
     else if (msg === '開始新局') {
       // 開局：骰運好的莊家吹噓；其他 AI 隨機寒暄
       if (view.diceBonusName) maybeSpeak(view.dealer, 'dice', .95);
@@ -764,6 +885,9 @@ function renderView(view) {
     Sound.discard();
   }
   sndPrevDiscards = totalDiscards;
+
+  // ---- 觀察局勢的特殊情境對話（猜牌型、猜運氣等） ----
+  checkSpecialDialogue(view);
 }
 
 function renderSeat(s, pos, seat, view) {
@@ -942,6 +1066,7 @@ function updateDiceGlass(view, pool) {
       if (view.diceBonusName) {
         const parts = [
           view.diceBonusTai > 0 ? `+${view.diceBonusTai}台` : '',
+          view.diceBonusTaiMult > 1 ? `台數×${view.diceBonusTaiMult}` : '',
           view.diceBonusMult > 1 ? `籌碼×${view.diceBonusMult}` : '',
         ].filter(Boolean).join('、');
         bonusEl.textContent = view.diceBonusName + (parts ? `（${parts}）` : '');
@@ -1206,6 +1331,7 @@ function showHandOver(payload) {
   } else if (payload.result === 'falseHu' && lastView) {
     const ais = lastView.seats.map((s, i) => (s.isAI && i !== payload.offender) ? i : -1).filter(i => i >= 0);
     if (ais.length) maybeSpeak(ais[Math.floor(Math.random() * ais.length)], 'mock', .95);
+    maybeCommentOn(payload.offender, 'distrustAfterFalseHu', .5);
   }
   // 胡牌超過 2 台 → 先全螢幕浮現牌型，再進結算
   if (payload.result === 'win') {
@@ -1235,8 +1361,11 @@ function showWinSplash(payload, winner, done) {
   el.querySelector('.splash-types').innerHTML = types.map((t, i) =>
     `<div class="splash-type" style="animation-delay:${0.25 + i * 0.32}s">${escapeHtml(t.name)}</div>`).join('');
   const mult = winner.score.multiplier || 1;
+  const taiMult = winner.score.taiMultiplier || 1;
   el.querySelector('.splash-tai').textContent =
-    `${winner.score.total} 台` + (mult > 1 ? `　×${mult}` : '');
+    `${winner.score.total} 台` +
+    (taiMult > 1 ? `（豹子台×${taiMult}）` : '') +
+    (mult > 1 ? `　×${mult}` : '');
 
   el.style.display = 'flex';
   el.classList.remove('splash-play');
@@ -1281,6 +1410,7 @@ function renderHandOverModal(payload) {
       const items = s.items.map(it => `<li>${it.name} <b>${it.tai}</b> 台</li>`).join('');
       const way = w.selfDraw ? '自摸' : ('胡 ' + escapeHtml(seatName(payload.from)) + ' 放的牌');
       const mult = s.multiplier || 1;
+      const taiMult = s.taiMultiplier || 1;
       const chips = (di + s.total * taiV) * mult;
       // 非莊家自摸：莊家那份加付莊家/連莊台
       const payNote = w.selfDraw
@@ -1291,7 +1421,7 @@ function renderHandOverModal(payload) {
         <div class="winner-block">
           <h3>🎉 ${escapeHtml(seatName(w.seat))}　<span class="win-way">${way}</span></h3>
           <div class="reveal-row">${tilesRowHTML(w.hand)}${meldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(meldTiles)}` : ''}<span class="reveal-sep">＋</span>${tilesRowHTML([w.winTile], w.winTile)}</div>
-          <div class="tai-total">共 ${s.total} 台${mult > 1 ? `　<span class="mult">豹子 ×${mult}</span>` : ''}
+          <div class="tai-total">共 ${s.total} 台${taiMult > 1 ? `　<span class="mult">豹子台×${taiMult}</span>` : ''}${mult > 1 ? `　<span class="mult">豹子籌碼×${mult}</span>` : ''}
             <span class="chip-line">底 ${di} + ${s.total}×${taiV}${mult > 1 ? `×${mult}` : ''} = <b>${chips}</b>${payNote}</span></div>
           <ul class="tai-items">${items || '<li>無台（屁胡）</li>'}</ul>
         </div>`;

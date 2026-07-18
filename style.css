@@ -258,8 +258,18 @@ input[type=text] {
 /* 對家：吃碰面子與花牌放在手牌「前方」（面向桌心那一側） */
 .seat-top .seat-info { order: 0; }
 .seat-top .seat-hand { order: 1; }
-.seat-top .seat-melds { order: 2; }
-.seat-top .seat-flowers { order: 3; }
+.seat-top .seat-extras { order: 2; }
+
+/* 花牌與吃碰面子同排並列（省空間），中間用一條細線區隔兩組 */
+.seat-extras {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; flex-wrap: wrap;
+}
+.seat-extras .seat-flowers:empty,
+.seat-extras .seat-melds:empty { display: none; }
+.seat-extras .seat-flowers:not(:empty) {
+  padding-right: 6px; border-right: 1px solid rgba(232,200,106,.3);
+}
 .seat-info {
   display: flex; gap: 8px; align-items: center; font-size: .8rem;
   background: linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.3));
@@ -590,6 +600,21 @@ input[type=text] {
 .tai-total .mult { color: #ff8a80; font-size: 1.1rem; }
 .chip-line { font-size: .85rem; color: #cfe6d8; margin-left: 8px; }
 
+/* 房間設定（可收合，等待室不再一次塞滿） */
+.settings-details {
+  margin-bottom: 16px; text-align: left;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(232,200,106,.25);
+  border-radius: 10px; padding: 2px 12px;
+}
+.settings-details summary {
+  cursor: pointer; padding: 10px 2px; color: var(--gold);
+  font-size: .9rem; font-weight: 600; list-style: none;
+}
+.settings-details summary::-webkit-details-marker { display: none; }
+.settings-details summary::before { content: '▸ '; display: inline-block; transition: transform .15s; }
+.settings-details[open] summary::before { transform: rotate(90deg); }
+.settings-details[open] { padding-bottom: 12px; }
+
 /* 房間設定列 */
 .settings-row {
   display: flex; gap: 16px; justify-content: center; margin-bottom: 14px;
@@ -742,11 +767,15 @@ input[type=text] {
   .tile-back-top { transform: translateY(calc(var(--i, 0) * 1.6px)); }
   .seat-top .seat-hand { margin-bottom: 26px; /* 預留階梯下移空間 */ }
 
-  /* 左右家：面子與花牌亮在手牌「前方」（靠桌心那一欄） */
+  /* 左右家：面子與花牌亮在手牌「前方」（靠桌心那一欄）——
+     維持原本各自獨立一列的版面，避免窄欄位擠壓導致牌被裁掉。
+     .seat-extras 在此僅作為 HTML 包裹用，不參與網格排版（display:contents
+     讓花牌／面子兩個子區塊直接成為 .seat-left/.seat-right 的網格項目）。 */
   .seat-left, .seat-right {
     display: grid; width: 175px; gap: 4px 10px;
     align-content: center; justify-content: center;
   }
+  .seat-left .seat-extras, .seat-right .seat-extras { display: contents; }
   .seat-left {
     grid-template-areas: "info info" "hand melds" "hand flowers";
     grid-template-columns: auto auto;
@@ -763,6 +792,10 @@ input[type=text] {
   .seat-right .seat-melds { align-items: flex-end; }
   .seat-left .seat-flowers, .seat-right .seat-flowers {
     grid-area: flowers; align-content: start; align-self: start; max-width: 118px;
+  }
+  /* 側家花牌不與面子同排，不需要橫排時的分隔線 */
+  .seat-left .seat-flowers:not(:empty), .seat-right .seat-flowers:not(:empty) {
+    border-right: none; padding-right: 0;
   }
 }
 

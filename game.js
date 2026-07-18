@@ -35,8 +35,9 @@ class GameEngine {
     this.turnLimitMs = (opts.turnLimitMs != null) ? opts.turnLimitMs : TURN_TIME_LIMIT_MS;
     this.aiLevel = opts.aiLevel || 'normal'; // 電腦強度 easy/normal/hard
     this.wallReserve = WALL_RESERVE; // 牌尾保留區（每局於 dealAndBegin 重設）
-    // 可選規則：哩咕（八對半）與骰子加成，預設皆開啟（維持目前設定）
-    this.rules = { ligu: opts.ligu !== false, diceBonus: opts.diceBonus !== false };
+    // 可選規則：哩咕（八對半）與骰子加成，預設皆開啟（維持目前設定）；
+    // leopardMode：豹子的效果 — 'chip3'籌碼×3（預設）／'tai3'台數×3
+    this.rules = { ligu: opts.ligu !== false, diceBonus: opts.diceBonus !== false, leopardMode: opts.leopardMode || 'chip3' };
     this.winOpts = { allowLiGu: this.rules.ligu }; // 供 isWinningHand/getTingTiles 沿用
     this.rng = mulberry32(opts.seed || (Date.now() >>> 0));
     this.phase = 'idle';
@@ -76,7 +77,7 @@ class GameEngine {
 
   /* -------- 擲骰（每局開始由莊家擲三顆）--------
    * 骰數和決定東風位（正花「春/梅」對應的座位）；
-   * 全紅(皆1或4) 胡牌+1台、骰歸(等差1) +2台、豹子(三同) 籌碼×3 */
+   * 全紅(皆1或4) +1台；骰歸(等差1) +2台；豹子(三同) 依房間設定為 籌碼×3／台數×3 */
   rollDice() {
     this.rollId = (this.rollId || 0) + 1; // 供前端辨識「新的一次擲骰」以播放翻滾動畫
     const d = () => 1 + Math.floor(this.rng() * 6);
@@ -85,13 +86,18 @@ class GameEngine {
     // 由莊家起算，依骰數和決定誰坐「東」
     this.eastSeat = (this.dealer + (sum - 1)) % 4;
     const sorted = this.dice.slice().sort((a, b) => a - b);
-    // 骰運可累積：例如 111/444 = 全紅(+1台) 且 豹子(×3)
+    // 骰運可累積：例如 111/444 = 全紅 且 豹子
     const names = [];
-    let tai = 0, mult = 1;
+    let tai = 0, mult = 1, taiMult = 1;
     if (this.dice.every(x => x === 1 || x === 4)) { names.push('全紅'); tai += 1; }
     if (sorted[1] === sorted[0] + 1 && sorted[2] === sorted[1] + 1) { names.push('骰歸'); tai += 2; }
-    if (sorted[0] === sorted[2]) { names.push('豹子'); mult = 3; }
-    this.diceBonus = (names.length && this.rules.diceBonus) ? { name: names.join('＋'), tai, mult } : null;
+    if (sorted[0] === sorted[2]) {
+      names.push('豹子');
+      const mode = this.rules.leopardMode || 'chip3';
+      if (mode === 'tai3') taiMult *= 3;
+      else mult *= 3; // 'chip3'（預設）
+    }
+    this.diceBonus = (names.length && this.rules.diceBonus) ? { name: names.join('＋'), tai, mult, taiMult } : null;
   }
 
   /* -------- 開始一局：先由莊家擲骰 -------- */
@@ -577,8 +583,13 @@ class GameEngine {
       if (actions.addKongs && actions.addKongs.length) {
         return this.doAddKong(seat, actions.addKongs[0]);
       }
-      const ctx = { seatDiscards: this.seats.map(s => s.discards), style: p.aiStyle };
-      const discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel, ctx);
+      const ctx = { seatDiscards: this.seats.map(s => s.discards), style: p.aiStyle, kuikaeForbidden: p.kuikaeForbidden || [] };
+      let discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel, ctx);
+      // 安全網：萬一還是選到剛吃/碰不能打的牌，改打手上第一張允許的牌，避免卡住不出牌
+      if (p.kuikaeForbidden && p.kuikaeForbidden.includes(discardTile)) {
+        const allowed = p.hand.find(t => !p.kuikaeForbidden.includes(t));
+        if (allowed) discardTile = allowed;
+      }
       this.discard(seat, discardTile);
     }, 1000); // 電腦間隔一秒出牌
   }
@@ -614,6 +625,11 @@ class GameEngine {
     };
     const score = scoreHand(ctx);
     score.multiplier = (this.diceBonus && this.diceBonus.mult > 1) ? this.diceBonus.mult : 1;
+    // 全紅「台數×3」：整手台數（含其餘所有台）一併乘3，再用來算籌碼
+    if (this.diceBonus && this.diceBonus.taiMult > 1) {
+      score.taiMultiplier = this.diceBonus.taiMult;
+      score.total *= this.diceBonus.taiMult;
+    }
     this.settle(seat, score, selfDraw, loser);
     return {
       seat, winTile, selfDraw, score,
@@ -847,8 +863,7 @@ class GameEngine {
       diceBonusName: this.diceBonus ? this.diceBonus.name : null,
       diceBonusTai: this.diceBonus ? this.diceBonus.tai : 0,
       diceBonusMult: this.diceBonus ? this.diceBonus.mult : 1,
-      diceBonusTai: this.diceBonus ? this.diceBonus.tai : 0,
-      diceBonusMult: this.diceBonus ? this.diceBonus.mult : 1,
+      diceBonusTaiMult: this.diceBonus ? (this.diceBonus.taiMult || 1) : 1,
       eastSeat: (this.eastSeat != null) ? this.eastSeat : this.dealer,
       baseDi: this.baseDi, baseTai: this.baseTai,
       // 剛摸上來的牌（僅在該玩家要行動、且是真的摸牌而非吃碰時）

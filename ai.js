@@ -34,12 +34,19 @@ function styleParams(style) {
  * @param {string[]} hand 暗牌（不含花）
  * @param {object[]} melds 已亮面子
  * @param {string} level 強度：easy(常亂打) / normal(偶有失誤) / hard(全力＋防守)
- * @param {object} ctx 可選：{ seatDiscards: string[][], style } 各家棄牌與本家偏好打法
+ * @param {object} ctx 可選：{ seatDiscards: string[][], style, kuikaeForbidden } 各家棄牌、
+ *   本家偏好打法、剛吃/碰完這輪不能打的牌（喰い替え限制）
  * @returns {string} 要打出的牌
  */
 function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {
-  const tiles = hand.filter(t => !isFlower(t));
-  // 依強度加入「失誤率」：直接亂打一張
+  const allTiles = hand.filter(t => !isFlower(t));
+  // 剛吃/碰完的限制牌：從候選中直接排除，不能因為它分數高就選它
+  // （若排除後空了——理論上不會發生，因為最多禁2張——就退回完整手牌避免卡死）
+  const forbidden = (ctx && ctx.kuikaeForbidden) || [];
+  const filtered = forbidden.length ? allTiles.filter(t => !forbidden.includes(t)) : allTiles;
+  const tiles = filtered.length ? filtered : allTiles;
+
+  // 依強度加入「失誤率」：直接亂打一張（仍只從允許的候選裡選）
   const noise = level === 'easy' ? 0.55 : (level === 'normal' ? 0.12 : 0);
   if (noise > 0 && Math.random() < noise) {
     return tiles[Math.floor(Math.random() * tiles.length)];

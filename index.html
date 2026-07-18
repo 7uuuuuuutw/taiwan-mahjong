@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=21 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=21">
+  <!-- v= 版本號：每次改版把下面所有 v=27 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
 
@@ -53,45 +53,56 @@
       <div id="player-list" class="player-list"></div>
 
       <div id="host-controls" style="display:none">
-        <div class="settings-row">
-          <label>底 / 台
-            <select id="opt-stakes">
-              <option value="30,10">30 / 10</option>
-              <option value="50,20">50 / 20</option>
-              <option value="100,50">100 / 50</option>
-              <option value="200,50">200 / 50</option>
-              <option value="300,100">300 / 100</option>
-            </select>
-          </label>
-          <label>出牌計時
-            <select id="opt-timer">
-              <option value="20">20 秒</option>
-              <option value="10">10 秒</option>
-              <option value="5">5 秒</option>
-              <option value="0">不計時</option>
-            </select>
-          </label>
-          <label>電腦強度
-            <select id="opt-ai">
-              <option value="normal">普通</option>
-              <option value="easy">簡單</option>
-              <option value="hard">困難</option>
-            </select>
-          </label>
-          <label>牌背顏色
-            <select id="opt-back">
-              <option value="green">經典綠</option>
-              <option value="blue">寶石藍</option>
-              <option value="red">朱砂紅</option>
-              <option value="purple">紫羅蘭</option>
-              <option value="night">墨黑</option>
-            </select>
-          </label>
-        </div>
-        <div class="settings-row settings-checks">
-          <label class="check-label"><input type="checkbox" id="opt-ligu" checked> 哩咕（八對半）8台</label>
-          <label class="check-label"><input type="checkbox" id="opt-dicebonus" checked> 骰子加成（全紅／骰歸／豹子）</label>
-        </div>
+        <details class="settings-details">
+          <summary>⚙️ 房間設定（點開調整）</summary>
+          <div class="settings-row">
+            <label>底 / 台
+              <select id="opt-stakes">
+                <option value="30,10">30 / 10</option>
+                <option value="50,20">50 / 20</option>
+                <option value="100,50">100 / 50</option>
+                <option value="200,50">200 / 50</option>
+                <option value="300,100">300 / 100</option>
+              </select>
+            </label>
+            <label>出牌計時
+              <select id="opt-timer">
+                <option value="20">20 秒</option>
+                <option value="10">10 秒</option>
+                <option value="5">5 秒</option>
+                <option value="0">不計時</option>
+              </select>
+            </label>
+            <label>電腦強度
+              <select id="opt-ai">
+                <option value="normal">普通</option>
+                <option value="easy">簡單</option>
+                <option value="hard">困難</option>
+              </select>
+            </label>
+            <label>牌背顏色
+              <select id="opt-back">
+                <option value="green">經典綠</option>
+                <option value="blue">寶石藍</option>
+                <option value="red">朱砂紅</option>
+                <option value="purple">紫羅蘭</option>
+                <option value="night">墨黑</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-row settings-checks">
+            <label class="check-label"><input type="checkbox" id="opt-ligu" checked> 哩咕（八對半）8台</label>
+            <label class="check-label"><input type="checkbox" id="opt-dicebonus" checked> 骰子加成（全紅／骰歸／豹子）</label>
+          </div>
+          <div class="settings-row">
+            <label>豹子效果
+              <select id="opt-leopard">
+                <option value="chip3">籌碼 ×3（預設）</option>
+                <option value="tai3">台數 ×3</option>
+              </select>
+            </label>
+          </div>
+        </details>
         <button id="btn-start" class="big-btn primary">開始遊戲</button>
         <p class="hint-text">空位會由電腦補位，隨時可開始。可用 ↑↓ 調整座位順序。</p>
       </div>
@@ -115,8 +126,10 @@
       <!-- 對家(上) -->
       <div id="seat-top" class="seat seat-top">
         <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
-        <div class="seat-flowers"></div>
-        <div class="seat-melds"></div>
+        <div class="seat-extras">
+          <div class="seat-flowers"></div>
+          <div class="seat-melds"></div>
+        </div>
         <div class="seat-hand"></div>
       </div>
 
@@ -124,8 +137,10 @@
         <!-- 左家 -->
         <div id="seat-left" class="seat seat-left">
           <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
-          <div class="seat-flowers"></div>
-          <div class="seat-melds"></div>
+          <div class="seat-extras">
+            <div class="seat-flowers"></div>
+            <div class="seat-melds"></div>
+          </div>
           <div class="seat-hand"></div>
         </div>
 
@@ -135,8 +150,10 @@
         <!-- 右家 -->
         <div id="seat-right" class="seat seat-right">
           <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
-          <div class="seat-flowers"></div>
-          <div class="seat-melds"></div>
+          <div class="seat-extras">
+            <div class="seat-flowers"></div>
+            <div class="seat-melds"></div>
+          </div>
           <div class="seat-hand"></div>
         </div>
       </div>
@@ -144,8 +161,10 @@
       <!-- 自己(下) -->
       <div id="seat-bottom" class="seat seat-bottom">
         <div class="seat-info"><span class="seat-name"></span><span class="seat-score"></span></div>
-        <div class="seat-flowers"></div>
-        <div class="seat-melds"></div>
+        <div class="seat-extras">
+          <div class="seat-flowers"></div>
+          <div class="seat-melds"></div>
+        </div>
         <div class="seat-hand"></div>
       </div>
     </div>
@@ -183,12 +202,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=21"></script>
-  <script src="tiles.js?v=21"></script>
-  <script src="sound.js?v=21"></script>
-  <script src="ai.js?v=21"></script>
-  <script src="game.js?v=21"></script>
-  <script src="network.js?v=21"></script>
-  <script src="main.js?v=21"></script>
+  <script src="mahjong.js?v=27"></script>
+  <script src="tiles.js?v=27"></script>
+  <script src="sound.js?v=27"></script>
+  <script src="ai.js?v=27"></script>
+  <script src="game.js?v=27"></script>
+  <script src="network.js?v=27"></script>
+  <script src="main.js?v=27"></script>
 </body>
 </html>
