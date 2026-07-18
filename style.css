@@ -473,7 +473,13 @@ input[type=text] {
   border-radius: 14px;
   box-shadow: inset 0 3px 14px rgba(0,0,0,.35), inset 0 -1px 0 rgba(255,255,255,.05);
 }
-.discard-zone { display: flex; flex-wrap: wrap; gap: 2px; align-content: flex-start; }
+/* min-height/min-width:0 讓 flex 容器能在 grid 格內真正縮小；
+   打過的牌一多（flex-wrap 換行）沒有這個就會撐爆格子，把牌擠出桌外。
+   超出格子時改捲動，保留完整棄牌歷史而不是被裁掉或溢出。 */
+.discard-zone {
+  display: flex; flex-wrap: wrap; gap: 2px; align-content: flex-start;
+  min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden;
+}
 .discard-bottom { grid-area: bottom; justify-content: center; }
 .discard-top { grid-area: top; justify-content: center; }
 .discard-left { grid-area: left; }
