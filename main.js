@@ -249,7 +249,7 @@ function moveSeat(a, b) {
 
 /* ---------- 電腦角色（個性與情境對話，純演出不影響遊戲） ---------- */
 const AI_CHARACTERS = [
-  { name: '旺來伯', emoji: '🍍', lines: { // 台語老江湖
+  { name: '旺來伯', emoji: '🍍', style: 'gambler', lines: { // 台語老江湖
     greet: ['少年仔，來啦來啦～', '呷飽沒？來摸兩圈！'],
     pong: ['碰！這款好料我怎會放過', '歹勢啦，碰！'],
     chi: ['呷一下無要緊乎？', '吃！嘸通見怪～'],
@@ -262,7 +262,7 @@ const AI_CHARACTERS = [
     dice: ['骰仔有靈聖喔！', '你看這手氣！'],
     mock: ['啊你是在胡啥啦！', '憨囝仔，詐胡是要賠錢的餒'],
   }},
-  { name: '阿花姨', emoji: '🌺', lines: { // 菜市場戰神，愛碎念
+  { name: '阿花姨', emoji: '🌺', style: 'aggressive', lines: { // 菜市場戰神，愛碎念
     greet: ['我跟你說，我今天手氣特別好', '等我一下，滷肉還在爐上'],
     pong: ['碰！這我要的啦', '碰起來！別跟我搶'],
     chi: ['吃啊，不吃白不吃', '這張我等很久了餒'],
@@ -275,7 +275,7 @@ const AI_CHARACTERS = [
     dice: ['看我的骰！旺喔！', '這骰數，發啦！'],
     mock: ['嘖嘖，詐胡喔，丟臉丟到家', '看清楚再喊啦！'],
   }},
-  { name: '雀聖', emoji: '🐦', lines: { // 高深莫測的宗師
+  { name: '雀聖', emoji: '🐦', style: 'defensive', lines: { // 高深莫測的宗師
     greet: ['牌品即人品。', '靜心，方能聽牌。'],
     pong: ['碰。此乃天意。', '碰。時機已至。'],
     chi: ['吃。順勢而為。', '牌河之流，取之有道。'],
@@ -288,7 +288,7 @@ const AI_CHARACTERS = [
     dice: ['骰運通天。', '此數，吉。'],
     mock: ['心浮氣躁，故有此敗。', '詐胡者，戒。'],
   }},
-  { name: '紅中俠', emoji: '🀄', lines: { // 中二武俠
+  { name: '紅中俠', emoji: '🀄', style: 'aggressive', lines: { // 中二武俠
     greet: ['紅中俠參上！今日必雪前恥！', '江湖險惡，牌桌更甚！'],
     pong: ['碰！接我這招！', '哼，天下武功唯快不破！'],
     chi: ['吃！此乃借力打力！', '多謝施主贈牌！'],
@@ -301,7 +301,7 @@ const AI_CHARACTERS = [
     dice: ['骰出驚天之數！', '此乃天命！'],
     mock: ['詐胡？武林大忌！', '年輕人，莫要心急！'],
   }},
-  { name: '發財哥', emoji: '💰', lines: { // 滿腦子錢
+  { name: '發財哥', emoji: '💰', style: 'bigHand', lines: { // 滿腦子錢
     greet: ['各位！今天誰要發財？', '本金帶夠沒？哈哈！'],
     pong: ['碰！穩賺不賠！', '這張是績優股，碰！'],
     chi: ['吃！低買高賣！', '這波我抄底！'],
@@ -314,7 +314,7 @@ const AI_CHARACTERS = [
     dice: ['開盤大吉！', '這骰數，牛市啊！'],
     mock: ['詐胡跟內線交易一樣母湯！', '違約交割囉～'],
   }},
-  { name: '骰神', emoji: '🎲', lines: { // 迷信賭徒
+  { name: '骰神', emoji: '🎲', style: 'gambler', lines: { // 迷信賭徒
     greet: ['今天黃道吉日，宜打牌', '我拜過了，這局穩的'],
     pong: ['碰！運勢來了擋不住！', '碰！這是註定的'],
     chi: ['吃！命中帶吃！', '流年利我！'],
@@ -327,7 +327,7 @@ const AI_CHARACTERS = [
     dice: ['看到沒！這就是骰神！', '骰出吉數，大殺四方！'],
     mock: ['亂喊胡會倒楣三年喔', '神明都看不下去了'],
   }},
-  { name: '月光姐', emoji: '🌙', lines: { // 優雅淡定
+  { name: '月光姐', emoji: '🌙', style: 'defensive', lines: { // 優雅淡定
     greet: ['晚上好，各位。', '願今晚牌局如月色般美好。'],
     pong: ['碰。失禮了。', '這張，我便收下了。'],
     chi: ['吃。謝謝你。', '正好缺這張呢。'],
@@ -340,7 +340,7 @@ const AI_CHARACTERS = [
     dice: ['月色與骰運都正好。', '好兆頭。'],
     mock: ['急躁了呢。', '深呼吸，再看一次牌吧。'],
   }},
-  { name: '海底撈', emoji: '🎣', lines: { // 釣魚梗大王
+  { name: '海底撈', emoji: '🎣', style: 'bigHand', lines: { // 釣魚梗大王
     greet: ['今天來釣大魚！', '魚餌上好了，開局！'],
     pong: ['碰！上鉤了！', '這尾我要了！'],
     chi: ['吃！願者上鉤！', '收線收線～'],
@@ -353,7 +353,7 @@ const AI_CHARACTERS = [
     dice: ['浪頭正好！', '出海吉日！'],
     mock: ['喊胡前先看魚上鉤沒啊', '空鉤起竿，糗了吧'],
   }},
-  { name: '龜速伯', emoji: '🐢', lines: { // 慢性子
+  { name: '龜速伯', emoji: '🐢', style: 'defensive', lines: { // 慢性子
     greet: ['等等我…讓我坐好…', '不急，牌會等人的…'],
     pong: ['等一下…碰。', '慢慢來…碰。'],
     chi: ['讓我想想…吃。', '嗯…吃好了。'],
@@ -366,7 +366,7 @@ const AI_CHARACTERS = [
     dice: ['骰子…滾慢一點…', '好數字，不錯不錯…'],
     mock: ['你看，急就出錯了吧…', '像我這樣慢慢確認嘛…'],
   }},
-  { name: '小辣椒', emoji: '🌶️', lines: { // 嗆辣直球
+  { name: '小辣椒', emoji: '🌶️', style: 'aggressive', lines: { // 嗆辣直球
     greet: ['就這陣容？贏定了', '手下不留情喔，先說'],
     pong: ['碰！不好意思喔～', '這張？我的！'],
     chi: ['吃！謝謝招待～', '送到嘴邊哪有不吃的'],
@@ -378,6 +378,136 @@ const AI_CHARACTERS = [
     draw: ['無聊！都不給胡', '你們防太緊了吧！'],
     dice: ['看到沒？氣勢！', '骰子也懂看人臉色'],
     mock: ['噗，詐胡？笑死', '衝動是魔鬼～'],
+  }},
+  { name: '阿吉師', emoji: '🔥', style: 'aggressive', lines: { // 台式黑手工頭，做事衝
+    greet: ['開工開工，今仔日拚一下！', '免驚，我攏嘛全力以赴'],
+    pong: ['碰！手路到位！', '免客氣，我拿去！'],
+    chi: ['吃！順手牽羊', '吃起來，繼續衝！'],
+    kong: ['槓落去，大工程開始！', '槓！加碼下去！'],
+    flower: ['花也拿去，賺到賺到', '順便補一支花'],
+    win: ['贏啦！收工領錢！', '衝就對了，胡啦！'],
+    tsumo: ['自摸！力量的證明！', '免放槍，自己摸就好！'],
+    lose: ['哎，這關過不去', '拚過頭，煞去'],
+    draw: ['流局？下一場再拚', '沒關係，工程還沒完'],
+    dice: ['骰仔給我大力一點！', '這手氣不錯喔！'],
+    mock: ['衝過頭就是這樣', '做工也要看時機啦'],
+  }},
+  { name: '風火輪嫂', emoji: '🛞', style: 'speed', lines: { // 做什麼都風風火火
+    greet: ['來來來，別浪費時間', '手腳要快，牌才會贏'],
+    pong: ['碰，秒殺！', '快狠準，碰！'],
+    chi: ['吃，別耽誤時間', '吃了就走，效率至上'],
+    kong: ['槓，一次到位！', '槓完馬上補！'],
+    flower: ['花補一下，順便的事', '快速補花，不囉唆'],
+    win: ['胡了！我最快！', '看吧，速度才是王道'],
+    tsumo: ['自摸，眨眼間的事', '快！自摸來了！'],
+    lose: ['太趕了，漏算一步', '下次要更快'],
+    draw: ['流局也不浪費時間', '走，下一局！'],
+    dice: ['骰子咻一下就好了', '快轉，看結果！'],
+    mock: ['衝太快反而摔跤', '欲速則不達啦'],
+  }},
+  { name: '錦鯉妹', emoji: '🐠', style: 'gambler', lines: { // 自認超強運
+    greet: ['我是錦鯉本鯉，沾點運氣', '今天氣場很旺喔'],
+    pong: ['碰！錦鯉附體！', '運氣來了擋不住，碰！'],
+    chi: ['吃，這是命運安排', '吃了，緣分到了'],
+    kong: ['槓！大吉大利！', '槓出好運道！'],
+    flower: ['錦鯉當然要花團錦簇', '花來了，好兆頭！'],
+    win: ['看吧，我就是錦鯉！', '沾我的手氣，胡啦！'],
+    tsumo: ['自摸！錦鯉威力！', '運氣爆棚，自摸！'],
+    lose: ['咦，今天鯉魚失靈？', '運氣也有離線的時候'],
+    draw: ['流局，鯉魚在充電', '沒事，運氣蓄力中'],
+    dice: ['骰子聽我的，旺！', '錦鯉骰，必是好數！'],
+    mock: ['亂喊胡，鯉魚都嚇跑了', '衝動不是好運，是傻運'],
+  }},
+  { name: '老棋王', emoji: '♟️', style: 'defensive', lines: { // 下棋式精算，滴水不漏
+    greet: ['且慢，棋要一步步下', '穩紮穩打，方能致勝'],
+    pong: ['碰，此步算過了', '碰，穩健之選'],
+    chi: ['吃，順勢佈局', '吃這張，棋路更穩'],
+    kong: ['槓，局勢已算清', '槓，穩中求進'],
+    flower: ['花，錦上添花罷了', '順手補花，無傷大雅'],
+    win: ['將軍，胡牌', '此局，老夫勝出'],
+    tsumo: ['自摸，一切盡在計算中', '按部就班，自摸而已'],
+    lose: ['一步錯，滿盤輸', '棋差一著，甘拜下風'],
+    draw: ['和局，亦是常態', '不輸不贏，穩妥'],
+    dice: ['骰數已定，穩住', '此數，可攻可守'],
+    mock: ['心急吃不了熱豆腐', '莽撞之舉，不可取'],
+  }},
+  { name: '一色痴', emoji: '🎨', style: 'bigHand', lines: { // 執著清一色、寧缺勿濫
+    greet: ['今天，一定要清一色', '雜色免談，純色才美'],
+    pong: ['碰？只碰同色的', '同花色，才值得碰'],
+    chi: ['吃，維持我的純色大業', '這張補得漂亮'],
+    kong: ['槓，同色槓最美', '槓出一片天，同色的'],
+    flower: ['花不分色，來者不拒', '花牌，錦上添花'],
+    win: ['清一色，這才叫藝術！', '看，純色就是暴力！'],
+    tsumo: ['自摸，純色的勝利！', '一色到底，自摸！'],
+    lose: ['雜了，可惜這手好牌', '差一點就純色了…'],
+    draw: ['流局，純色大業延後', '沒關係，下局繼續追'],
+    dice: ['骰子也要有品味', '這數字，有藝術感'],
+    mock: ['亂喊胡，毀了我的畫作', '色都沒湊齊喊什麼胡'],
+  }},
+  { name: '拼場霸', emoji: '💪', style: 'aggressive', lines: { // 氣勢壓人、逢碰必碰
+    greet: ['今天這場，我罩！', '誰要跟我拼一下？'],
+    pong: ['碰！氣勢不能輸！', '碰下去，別客氣！'],
+    chi: ['吃！先搶先贏！', '吃了就是我的！'],
+    kong: ['槓！霸氣外露！', '槓落去，展現實力！'],
+    flower: ['花也要搶第一', '順便拿花，不吃虧'],
+    win: ['霸主駕到，胡了！', '看誰還敢跟我拼！'],
+    tsumo: ['自摸！我最強！', '不用等，自己摸贏！'],
+    lose: ['哼，這局算你的', '下把討回來！'],
+    draw: ['流局，算你們好運', '沒關係，氣勢還在'],
+    dice: ['骰子也要聽我的！', '這氣勢，穩了！'],
+    mock: ['亂喊胡，氣勢都沒了', '拼過頭也要看牌啊'],
+  }},
+  { name: '抓藥仙', emoji: '🌿', style: 'defensive', lines: { // 中藥行老闆，慢工出細活但精準
+    greet: ['慢慢來，把脈先', '穩，才是養生之道'],
+    pong: ['碰，這味藥剛好', '碰，配方剛剛好'],
+    chi: ['吃，補一帖剛好', '吃了，藥性更全'],
+    kong: ['槓，藥效加倍', '槓，補齊藥材'],
+    flower: ['花，養眼養生', '順手採一朵花'],
+    win: ['方子成了，胡牌', '藥到病除，胡啦'],
+    tsumo: ['自摸，體內調理好了', '不假外求，自摸'],
+    lose: ['藥不對症，可惜', '這帖藥，下錯了'],
+    draw: ['流局，療程未完', '慢慢調理，別急'],
+    dice: ['骰數如脈象，看穩不穩', '此數，氣血通暢'],
+    mock: ['心急藥材會抓錯', '亂胡如亂服藥，傷身'],
+  }},
+  { name: '衝浪弟', emoji: '🏄', style: 'speed', lines: { // 年輕衝動、抓緊每個機會
+    greet: ['浪來了，衝就對了！', '準備好接招沒？'],
+    pong: ['碰！浪頭抓住了！', '碰，站穩浪板！'],
+    chi: ['吃！乘風而起！', '吃了，順著浪走！'],
+    kong: ['槓！大浪來了！', '槓，衝上浪尖！'],
+    flower: ['花，順便撿個貝殼', '補花，海邊小確幸'],
+    win: ['胡了！完美衝浪！', '看我漂亮落地，胡！'],
+    tsumo: ['自摸！浪尖上的勝利！', '自己衝出來的，自摸！'],
+    lose: ['哇，吃浪了…', '摔了，這浪太猛'],
+    draw: ['流局，風平浪靜', '沒浪，休息一下'],
+    dice: ['骰子跟浪一樣難測', '這數，浪頭正好！'],
+    mock: ['衝過頭會摔的啦', '看錯浪，這下糗了'],
+  }},
+  { name: '賭神嫂', emoji: '🎰', style: 'gambler', lines: { // 拉霸機式豪賭精神
+    greet: ['拉霸機都輸我，來吧', '今天要下重注了'],
+    pong: ['碰！全下！', '梭哈精神，碰！'],
+    chi: ['吃，小賭怡情', '吃了，繼續加碼'],
+    kong: ['槓！All in！', '槓，賭場都嚇到'],
+    flower: ['花來了，附贈的籌碼', '中獎啦，花牌！'],
+    win: ['莊家通殺，胡牌！', '賭神駕到，收錢！'],
+    tsumo: ['自摸！豹子連線！', '中頭獎啦，自摸！'],
+    lose: ['唉，這把梭哈失敗', '賭神也有失手時'],
+    draw: ['流局，籌碼先收好', '沒開獎，再等等'],
+    dice: ['骰子才是我的主場！', '看這手氣，穩贏！'],
+    mock: ['亂梭哈是會傾家蕩產的', '賭也要有分寸啦'],
+  }},
+  { name: '隱士翁', emoji: '🎋', style: 'bigHand', lines: { // 大隱於市，不動則已一動驚人
+    greet: ['老夫深居簡出，今日現身', '不鳴則已，一鳴驚人'],
+    pong: ['碰？俗物，勉強為之', '碰，權宜之計'],
+    chi: ['吃，暫且將就', '吃了，靜待時機'],
+    kong: ['槓，蓄勢待發', '槓，為大局鋪路'],
+    flower: ['花，山野間常見之物', '順手拾花'],
+    win: ['厚積薄發，胡矣', '大隱於市，一胡驚人'],
+    tsumo: ['自摸，天地自有安排', '不爭而得，自摸'],
+    lose: ['罷了，順其自然', '此局，隨風而去'],
+    draw: ['流局，正合我意', '無為而治，甚好'],
+    dice: ['骰數如天意，不可強求', '此數，順應自然'],
+    mock: ['心浮氣躁，非隱士所為', '妄動者，必有所失'],
   }},
 ];
 
@@ -403,6 +533,8 @@ function onHostStart() {
   const optTimerSec = +document.getElementById('opt-timer').value;
   const optAi = document.getElementById('opt-ai').value;
   const optBack = document.getElementById('opt-back').value;
+  const optLigu = document.getElementById('opt-ligu').checked;
+  const optDiceBonus = document.getElementById('opt-dicebonus').checked;
   applyTileBack(optBack);
 
   // 組出 4 個座位（不足補 AI，給創意名字）
@@ -415,8 +547,8 @@ function onHostStart() {
       seats.push({ id: 'p' + i, name: p.name, isAI: false });
       seatOwners.push({ seat: i, kind: p.kind, peerId: p.peerId });
     } else {
-      const prof = aiPool.pop() || { name: '電腦' + (i + 1), emoji: '🤖' };
-      seats.push({ id: 'ai' + i, name: prof.emoji + prof.name, isAI: true });
+      const prof = aiPool.pop() || { name: '電腦' + (i + 1), emoji: '🤖', style: 'balanced' };
+      seats.push({ id: 'ai' + i, name: prof.emoji + prof.name, isAI: true, aiStyle: prof.style || 'balanced' });
       seatOwners.push({ seat: i, kind: 'ai', peerId: null });
     }
   }
@@ -424,7 +556,7 @@ function onHostStart() {
   engine = new GameEngine(seats, hostEmit, {
     roundWind: 0, dealer: 0, dealerStreak: 0,
     baseDi: optDi, baseTai: optTai, turnLimitMs: optTimerSec * 1000,
-    aiLevel: optAi,
+    aiLevel: optAi, ligu: optLigu, diceBonus: optDiceBonus,
   });
 
   // 通知所有 client 進入遊戲（含牌背顏色設定）
@@ -660,8 +792,10 @@ function renderSeat(s, pos, seat, view) {
       const i = tiles.indexOf(view.drawnTile);
       if (i >= 0) drawn = tiles.splice(i, 1)[0];
     }
+    const forbidden = s.kuikaeForbidden || [];
     for (const t of tiles) {
       const el = makeTile(t, true);
+      if (forbidden.includes(t)) el.classList.add('tile-forbidden');
       attachDragDiscard(el, t);
       handEl.appendChild(el);
     }
@@ -811,10 +945,30 @@ function updateDiceGlass(view, pool) {
           view.diceBonusMult > 1 ? `籌碼×${view.diceBonusMult}` : '',
         ].filter(Boolean).join('、');
         bonusEl.textContent = view.diceBonusName + (parts ? `（${parts}）` : '');
+        if (view.diceBonusName.includes('豹子')) {
+          // 豹子：骰盅持續發光＋全螢幕大字閃現，更為醒目（純視覺，避免與胡牌音效混淆）
+          glass.classList.add('leopard-glow');
+          setTimeout(() => glass.classList.remove('leopard-glow'), 2200);
+          showLeopardBanner(view.diceBonusName);
+        }
       }
       setTimeout(() => glass.classList.remove('settled'), 500);
     }
   }, 85);
+}
+
+/** 豹子（三顆同數）大字閃現橫幅 */
+function showLeopardBanner(label) {
+  let el = document.getElementById('leopard-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'leopard-banner';
+    document.getElementById('game-screen').appendChild(el);
+  }
+  el.textContent = '豹子！';
+  el.title = label;
+  el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
+  setTimeout(() => el.classList.remove('play'), 1500);
 }
 
 /* ---------- 牌的 DOM ---------- */
@@ -843,9 +997,16 @@ function makeBackTile(pos, index = 0) {
 /* ============================================================
  * 行動 UI
  * ============================================================ */
+let hasDiscardedOnce = false; // 出牌提示只在本次連線的第一次打牌時出現
 function onClickHandTile(tile) {
   if (!currentActions || !currentActions.discard) return;
+  // 剛吃／碰完不能打出的牌（喰い替え限制）
+  if (lastView) {
+    const forbidden = (lastView.seats[mySeat] && lastView.seats[mySeat].kuikaeForbidden) || [];
+    if (forbidden.includes(tile)) { toast('剛吃／碰，這張不能打'); return; }
+  }
   // 出牌
+  hasDiscardedOnce = true;
   sendAction({ type: 'discard', tile });
 }
 
@@ -896,15 +1057,22 @@ function attachDragDiscard(el, tile) {
       const play = !moved                                   // 輕點即打
         || isOverPlayZone(ev.clientX, ev.clientY)           // 拖到棄牌區
         || dy < -DRAG_UP_THRESHOLD;                         // 往上拖夠遠
-
-      if (play) {
-        onClickHandTile(tile); // 之後 renderView 會重建手牌，這張自然消失
-      } else {
-        // 沒拖到位 → 彈回
+      const forbidden = lastView && lastView.seats[mySeat]
+        ? (lastView.seats[mySeat].kuikaeForbidden || []) : [];
+      const bounceBack = () => {
         el.style.transition = 'transform .15s';
         el.style.transform = '';
         el.classList.remove('dragging', 'will-play');
         setTimeout(() => { el.style.transition = ''; }, 160);
+      };
+
+      if (play && forbidden.includes(tile)) {
+        toast('剛吃／碰，這張不能打');
+        bounceBack();
+      } else if (play) {
+        onClickHandTile(tile); // 之後 renderView 會重建手牌，這張自然消失
+      } else {
+        bounceBack(); // 沒拖到位 → 彈回
       }
     };
 
@@ -936,10 +1104,13 @@ function showTurnActions(payload) {
       addActionBtn(bar, '加槓 ' + tileName(t), 'kong', () => sendAction({ type: 'addKong', tile: t }));
     }
   }
-  const hint = document.createElement('span');
-  hint.className = 'action-hint';
-  hint.textContent = '👆 拖曳牌到中央打出（或輕點）';
-  bar.appendChild(hint);
+  // 出牌操作提示：只在本次連線的第一次打牌前顯示一次
+  if (!hasDiscardedOnce) {
+    const hint = document.createElement('span');
+    hint.className = 'action-hint';
+    hint.textContent = '👆 拖曳牌到中央打出（或輕點）';
+    bar.appendChild(hint);
+  }
 }
 
 function showClaimOffer(payload) {

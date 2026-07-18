@@ -343,6 +343,11 @@ input[type=text] {
   font-size: 9px; color: var(--gold); font-weight: 800; opacity: .8;
 }
 
+/* 剛吃／碰完不能打出的牌（喰い替え限制）：壓暗提示 */
+.seat-bottom .seat-hand .tile.tile-forbidden {
+  filter: grayscale(.6) brightness(.6);
+}
+
 /* 拖曳打牌 */
 .seat-bottom .seat-hand .tile.clickable { cursor: grab; touch-action: none; }
 .tile.dragging {
@@ -487,6 +492,32 @@ input[type=text] {
   0% { transform: translate(-50%, -50%) scale(1.12); }
   100% { transform: translate(-50%, -50%) scale(1); }
 }
+/* 豹子：骰盅持續發光提示 */
+#dice-glass.leopard-glow {
+  animation: leopardPulse .5s ease-in-out 4;
+}
+@keyframes leopardPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(232,200,106,.35), inset 0 -8px 18px rgba(0,0,0,.35), inset 0 6px 10px rgba(255,255,255,.12), 0 8px 22px rgba(0,0,0,.45); }
+  50% { box-shadow: 0 0 0 6px rgba(255,80,60,.85), 0 0 40px 12px rgba(255,120,60,.65), inset 0 -8px 18px rgba(0,0,0,.35), inset 0 6px 10px rgba(255,255,255,.2), 0 8px 22px rgba(0,0,0,.45); }
+}
+/* 豹子大字閃現橫幅 */
+#leopard-banner {
+  position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(.4);
+  font-family: var(--font-cn, serif);
+  font-size: clamp(2.4rem, 8vw, 4.4rem); font-weight: 900; letter-spacing: 10px;
+  color: transparent;
+  background: linear-gradient(180deg, #fff3c4 0%, #ff8a5c 45%, #c0392b 100%);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.6));
+  opacity: 0; pointer-events: none; z-index: 45;
+}
+#leopard-banner.play { animation: leopardBanner 1.5s cubic-bezier(.2,1.6,.35,1) forwards; }
+@keyframes leopardBanner {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(2.6) rotate(-6deg); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); }
+}
 .tile.center-discard {
   width: 48px; height: 64px; font-size: 22px;
   border-color: var(--gold);
@@ -567,6 +598,13 @@ input[type=text] {
 .settings-row select {
   margin-left: 6px; padding: 4px 8px; border-radius: 8px; border: none;
   background: rgba(255,255,255,.92); color: #111; font-size: .9rem;
+}
+.settings-checks { gap: 20px; }
+.check-label {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.check-label input[type=checkbox] {
+  width: 16px; height: 16px; accent-color: var(--gold); cursor: pointer;
 }
 .slot-ctrl { display: flex; gap: 4px; }
 .slot-ctrl .mini-btn { padding: 2px 8px; }

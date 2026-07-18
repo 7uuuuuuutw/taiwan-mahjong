@@ -8,7 +8,9 @@
 const CLAIM_TIMEOUT_MS = 15000; // 人類玩家反應（吃碰槓胡）逾時自動過水
 const TURN_TIME_LIMIT_MS = 20000; // 出牌逾時自動隨機打一張
 const WALL_RESERVE = 16; // 牌尾保留 16 張（8 墩）不摸，摸到剩保留區即流局；每開一槓保留區 +1
-const HU_GRACE_MS = 6000; // 有人可胡但不提示時的無聲反應窗口（自行按「胡」鈕）
+const HU_GRACE_MS = 9000; // 有人可胡但不提示時的無聲反應窗口（自行按「胡」鈕）
+const DICE_SETTLE_MS = 1250; // 擲骰翻滾動畫定格時間，超過後才開始發牌演出
+const AI_CLAIM_DELAY_MS = [650, 950]; // 真人打出的牌被電腦吃碰槓前的可見延遲區間
 
 class GameEngine {
   /**
@@ -18,7 +20,7 @@ class GameEngine {
    */
   constructor(seats, emit, opts = {}) {
     this.seats = seats.map((s, i) => ({
-      seat: i, id: s.id, name: s.name, isAI: !!s.isAI,
+      seat: i, id: s.id, name: s.name, isAI: !!s.isAI, aiStyle: s.aiStyle || 'balanced',
       hand: [], melds: [], flowers: [], discards: [], score: opts.scores ? opts.scores[i] : 0,
       connected: true,
       guoShui: false, // 過水：棄胡後，打出一張牌前不得再胡
@@ -33,6 +35,9 @@ class GameEngine {
     this.turnLimitMs = (opts.turnLimitMs != null) ? opts.turnLimitMs : TURN_TIME_LIMIT_MS;
     this.aiLevel = opts.aiLevel || 'normal'; // 電腦強度 easy/normal/hard
     this.wallReserve = WALL_RESERVE; // 牌尾保留區（每局於 dealAndBegin 重設）
+    // 可選規則：哩咕（八對半）與骰子加成，預設皆開啟（維持目前設定）
+    this.rules = { ligu: opts.ligu !== false, diceBonus: opts.diceBonus !== false };
+    this.winOpts = { allowLiGu: this.rules.ligu }; // 供 isWinningHand/getTingTiles 沿用
     this.rng = mulberry32(opts.seed || (Date.now() >>> 0));
     this.phase = 'idle';
     this.claimWindow = null;
@@ -86,7 +91,7 @@ class GameEngine {
     if (this.dice.every(x => x === 1 || x === 4)) { names.push('全紅'); tai += 1; }
     if (sorted[1] === sorted[0] + 1 && sorted[2] === sorted[1] + 1) { names.push('骰歸'); tai += 2; }
     if (sorted[0] === sorted[2]) { names.push('豹子'); mult = 3; }
-    this.diceBonus = names.length ? { name: names.join('＋'), tai, mult } : null;
+    this.diceBonus = (names.length && this.rules.diceBonus) ? { name: names.join('＋'), tai, mult } : null;
   }
 
   /* -------- 開始一局：先由莊家擲骰 -------- */
@@ -108,10 +113,12 @@ class GameEngine {
     }
   }
 
-  /** 莊家擲骰 → 發牌開打 */
+  /** 莊家擲骰 → 發牌開打（先讓玩家看到骰子結果，等翻滾動畫定格後才開始抓牌） */
   doRollAndDeal() {
     this.rollDice();
-    this.dealAndBegin();
+    this.phase = 'dice-rolled'; // 骰子已定案但尚未發牌，防止此空檔誤觸詐胡
+    this.emitState(`${this.seats[this.dealer].name} 擲出骰子`);
+    setTimeout(() => { if (!this.dead) this.dealAndBegin(); }, DICE_SETTLE_MS);
   }
 
   /** 發牌動畫：各家自莊家起輪流每次抓 4 張（共 4 輪），再依序補花。
@@ -120,7 +127,7 @@ class GameEngine {
     const deck = shuffle(buildDeck(), () => this.rng());
     this.wall = deck;
     this.wallReserve = WALL_RESERVE; // 每局重設保留區（開槓會 +1）
-    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; }
+    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.kuikaeForbidden = null; }
     this.phase = 'dealing';
 
     // 抓牌步驟：4 輪 × 4 家，每步抓 4 張
@@ -204,6 +211,7 @@ class GameEngine {
     p.hand = sortTiles(p.hand);
     this.drawnTile = tile;
     this.phase = 'act'; // 該玩家要行動（打牌/自摸/暗槓/加槓）
+    this.blockTsumoThisDraw = false; // 一般摸牌不受明槓限制
 
     const actions = this.selfActions(this.turn, tile);
     this.tsumoAvailable = actions.tsumo; // 供過水判斷（棄自摸）
@@ -220,8 +228,8 @@ class GameEngine {
   selfActions(seat, tile) {
     const p = this.seats[seat];
     const a = { discard: true, tsumo: false, concealedKongs: [], addKongs: [] };
-    // 自摸（過水中不得自摸）
-    if (!p.guoShui && isWinningHand(p.hand, p.melds)) a.tsumo = true;
+    // 自摸（過水中、或明槓補牌時不得自摸）
+    if (!p.guoShui && !this.blockTsumoThisDraw && isWinningHand(p.hand, p.melds, this.winOpts)) a.tsumo = true;
     // 暗槓
     a.concealedKongs = findConcealedKongs(p.hand);
     // 加槓（手上有牌與已碰的刻子相同）
@@ -258,6 +266,11 @@ class GameEngine {
     const p = this.seats[seat];
     const idx = p.hand.indexOf(tile);
     if (idx < 0) return;
+    // 喰い替え限制：剛吃/碰完，這張是不能打的
+    if (p.kuikaeForbidden && p.kuikaeForbidden.includes(tile)) {
+      this.emitState(`${p.name} 剛吃／碰，這張不能打`);
+      return;
+    }
     // 過水規則：
     //  - 這次打牌若是「放棄自摸」→ 進入過水（打出一張牌前不得再胡）
     //  - 否則，打出一張牌即解除過水
@@ -265,6 +278,7 @@ class GameEngine {
     if (decliningTsumo) p.guoShui = true;
     else if (p.guoShui) p.guoShui = false;
     this.tsumoAvailable = false;
+    p.kuikaeForbidden = null;
 
     p.hand.splice(idx, 1);
     p.discards.push(tile);
@@ -279,7 +293,7 @@ class GameEngine {
     const p = this.seats[seat];
     for (let i = 0; i < 4; i++) p.hand.splice(p.hand.indexOf(tile), 1);
     p.melds.push({ type: 'kong', tiles: [tile, tile, tile, tile], concealed: true });
-    this.afterKongDraw(seat);
+    this.afterKongDraw(seat, false); // 暗槓：補牌仍可自摸（槓上開花）
   }
 
   doAddKong(seat, tile) {
@@ -289,7 +303,7 @@ class GameEngine {
     for (let k = 1; k < 4; k++) {
       const other = (seat + k) % 4;
       const op = this.seats[other];
-      if (isWinningHand(op.hand.concat([tile]), op.melds)) {
+      if (isWinningHand(op.hand.concat([tile]), op.melds, this.winOpts)) {
         // 允許搶槓
         this.lastDiscard = { tile, from: seat };
         this.robbingKong = true;
@@ -300,10 +314,12 @@ class GameEngine {
     m.type = 'kong';
     m.tiles = [tile, tile, tile, tile];
     p.hand.splice(p.hand.indexOf(tile), 1);
-    this.afterKongDraw(seat);
+    this.afterKongDraw(seat, true); // 加槓為明槓：補牌不能自摸
   }
 
-  afterKongDraw(seat) {
+  /** @param isOpenKong 明槓（大明槓／加槓）為 true；暗槓為 false。
+   *  明槓補的牌不能自摸（僅暗槓可槓上開花）。 */
+  afterKongDraw(seat, isOpenKong) {
     // 每開一槓，牌尾保留區 +1（海底往前移一張）
     this.wallReserve += 1;
     // 槓後從牌尾補摸一張
@@ -321,7 +337,9 @@ class GameEngine {
     this.lastDrawWasKong = true;
     this.turn = seat;
     this.phase = 'act';
+    this.blockTsumoThisDraw = !!isOpenKong;
     const actions = this.selfActions(seat, tile);
+    if (isOpenKong) actions.tsumo = false; // 保險：即使 selfActions 算出能胡也不讓 AI 自動宣告
     this.tsumoAvailable = actions.tsumo;
     this.emitState(`${p.name} 槓`);
     if (p.isAI) this.aiSelfAct(seat, tile, actions);
@@ -336,7 +354,7 @@ class GameEngine {
       const p = this.seats[seat];
       const ent = {};
       // 胡（放槍 / 搶槓）；過水中不得胡
-      if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds)) ent.hu = true;
+      if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds, this.winOpts)) ent.hu = true;
       if (!robbing) {
         if (canPong(p.hand, tile)) ent.pong = true;
         // 禁止「槓上家」：打牌者若是本座位的上家（本座位為打牌者的下家），不得明槓
@@ -359,7 +377,7 @@ class GameEngine {
         addKongMeld.type = 'kong';
         addKongMeld.tiles = [tile, tile, tile, tile];
         p.hand.splice(p.hand.indexOf(tile), 1);
-        return this.afterKongDraw(from);
+        return this.afterKongDraw(from, true); // 加槓：補牌不能自摸
       }
       return this.nextTurn(from);
     }
@@ -368,8 +386,10 @@ class GameEngine {
     this.claimWindow = { tile, from, robbing, addKongMeld, eligible, responses: {} };
     this.emitState('等待其他玩家');
 
-    // AI 立即回應；人類只收到「吃碰槓」選項——胡牌永不提示，
+    // AI 回應；人類只收到「吃碰槓」選項——胡牌永不提示，
     // 玩家須自行判斷並按常駐「胡」鈕（declareHuAttempt 會對照內部 eligible）
+    // 若打牌者是真人，電腦的吃碰槓刻意延遲一下，讓大家能看清楚那張牌
+    const discarderIsHuman = !this.seats[from].isAI;
     let anyVisibleHuman = false;
     for (const seatStr of Object.keys(eligible)) {
       const seat = +seatStr;
@@ -378,8 +398,14 @@ class GameEngine {
         const decision = aiReactToDiscard(p.hand, p.melds, tile,
           { hu: eligible[seat].hu, pong: eligible[seat].pong, kong: eligible[seat].kong,
             chi: eligible[seat].chi, chiOptions: eligible[seat].chiOptions },
-          null, this.aiLevel);
-        this.submitClaim(seat, decision);
+          { style: p.aiStyle }, this.aiLevel);
+        if (discarderIsHuman) {
+          const [lo, hi] = AI_CLAIM_DELAY_MS;
+          const delay = lo + Math.random() * (hi - lo);
+          setTimeout(() => { if (!this.dead) this.submitClaim(seat, decision); }, delay);
+        } else {
+          this.submitClaim(seat, decision);
+        }
       } else {
         const visible = { ...eligible[seat] };
         delete visible.hu; // 隱藏胡牌提示
@@ -455,7 +481,7 @@ class GameEngine {
       addKongMeld.type = 'kong';
       addKongMeld.tiles = [tile, tile, tile, tile];
       p.hand.splice(p.hand.indexOf(tile), 1);
-      return this.afterKongDraw(from);
+      return this.afterKongDraw(from, true); // 加槓：補牌不能自摸
     }
 
     if (pongKong) {
@@ -468,7 +494,7 @@ class GameEngine {
         for (let i = 0; i < 3; i++) p.hand.splice(p.hand.indexOf(tile), 1);
         p.melds.push({ type: 'kong', tiles: [tile, tile, tile, tile], concealed: false });
         this.emitState(`${p.name} 槓`);
-        return this.afterKongDraw(seat);
+        return this.afterKongDraw(seat, true); // 大明槓：補牌不能自摸
       } else {
         for (let i = 0; i < 2; i++) p.hand.splice(p.hand.indexOf(tile), 1);
         p.melds.push({ type: 'pong', tiles: [tile, tile, tile], from });
@@ -476,6 +502,8 @@ class GameEngine {
         this.turn = seat;
         this.phase = 'act';
         this.drawnTile = null;
+        // 碰完不能立刻打出剛碰的那張牌（喰い替え限制）
+        p.kuikaeForbidden = [tile];
         this.emitState(`${p.name} 碰`);
         const actions = { discard: true, tsumo: false, concealedKongs: findConcealedKongs(p.hand), addKongs: [] };
         if (p.isAI) this.aiSelfAct(seat, null, actions);
@@ -497,6 +525,8 @@ class GameEngine {
       this.turn = seat;
       this.phase = 'act';
       this.drawnTile = null;
+      // 吃完不能立刻打出會讓這口吃變得「白吃」的牌（喰い替え限制）
+      p.kuikaeForbidden = this.computeKuikaeForbidden(tile, use);
       this.emitState(`${p.name} 吃`);
       const actions = { discard: true, tsumo: false, concealedKongs: findConcealedKongs(p.hand), addKongs: [] };
       if (p.isAI) this.aiSelfAct(seat, null, actions);
@@ -506,6 +536,24 @@ class GameEngine {
 
     // 全部過水 → 下一家
     this.nextTurn(from);
+  }
+
+  /** 吃完後不可立即打出的牌（喰い替え限制）：
+   *  永遠禁止打出剛被吃走的那張牌；若是「邊張」吃（用最小/最大兩張湊成吃），
+   *  也禁止打出會讓這口吃等同「白吃」的另一端延伸牌。
+   *  例：手牌 2345，吃別人的 2（用 3,4 組成 234）→ 禁打 2、5。 */
+  computeKuikaeForbidden(claimedTile, usedTiles) {
+    const suit = claimedTile[0];
+    const n = parseInt(claimedTile.slice(1), 10);
+    const forbidden = new Set([claimedTile]);
+    const nums = usedTiles.map(t => parseInt(t.slice(1), 10)).sort((a, b) => a - b);
+    if (nums[0] === n + 1 && nums[1] === n + 2) {        // 吃的是最小張（如吃2用3,4組234）
+      if (n + 3 <= 9) forbidden.add(suit + (n + 3));      // 禁打上緣延伸牌（如5）
+    } else if (nums[0] === n - 2 && nums[1] === n - 1) {  // 吃的是最大張（如吃4用2,3組234）
+      if (n - 3 >= 1) forbidden.add(suit + (n - 3));      // 禁打下緣延伸牌
+    }
+    // 中洞吃（用 n-1, n+1）：僅禁打被吃的牌本身，無額外延伸限制
+    return [...forbidden];
   }
 
   nextTurn(from) {
@@ -529,7 +577,8 @@ class GameEngine {
       if (actions.addKongs && actions.addKongs.length) {
         return this.doAddKong(seat, actions.addKongs[0]);
       }
-      const discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel);
+      const ctx = { seatDiscards: this.seats.map(s => s.discards), style: p.aiStyle };
+      const discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel, ctx);
       this.discard(seat, discardTile);
     }, 1000); // 電腦間隔一秒出牌
   }
@@ -561,6 +610,7 @@ class GameEngine {
       lastTile: this.drawableCount() <= 0, // 摸到/胡到可摸區最後一張 = 海底/河底
       concealedWin,
       diceBonus: this.diceBonus,
+      allowLiGu: this.rules.ligu,
     };
     const score = scoreHand(ctx);
     score.multiplier = (this.diceBonus && this.diceBonus.mult > 1) ? this.diceBonus.mult : 1;
@@ -616,7 +666,7 @@ class GameEngine {
    * 亂按胡但牌未成：賠給每家「自己最接近胡牌」的點數；
    * 付給莊家時再加莊家/連莊台（更包含莊家）。詐胡後換下一家坐莊。 */
   falseHu(seat) {
-    if (this.phase === 'over' || this.phase === 'dice' || this.phase === 'dealing') return;
+    if (this.phase === 'over' || this.phase === 'dice' || this.phase === 'dice-rolled' || this.phase === 'dealing') return;
     clearTimeout(this.claimTimer);
     this.clearTurnTimer();
     this.claimWindow = null;
@@ -656,11 +706,11 @@ class GameEngine {
       isDealer: seat === this.dealer, dealerInvolved: false,
       seatWind: (seat - east + 4) % 4, roundWind: this.roundWind,
       dealerStreak: 0, concealedWin: p.melds.every(m => m.concealed),
-      diceBonus: this.diceBonus,
+      diceBonus: this.diceBonus, allowLiGu: this.rules.ligu,
     };
     const tryHand = (hand16) => {
       let best = 0;
-      for (const w of getTingTiles(hand16, p.melds)) {
+      for (const w of getTingTiles(hand16, p.melds, this.winOpts)) {
         const s = scoreHand({ ...baseCtx, hand: hand16, winTile: w });
         if (s.total > best) best = s.total;
       }
@@ -684,30 +734,34 @@ class GameEngine {
 
   /** 常駐「胡」鈕的宣告：成牌就胡、過水提示、否則詐胡 */
   declareHuAttempt(seat) {
-    if (this.phase === 'over' || this.phase === 'dice' || this.phase === 'dealing') return;
+    if (this.phase === 'over' || this.phase === 'dice' || this.phase === 'dice-rolled' || this.phase === 'dealing') return;
     const p = this.seats[seat];
     // 自己回合（摸牌後）
     if (this.phase === 'act' && this.turn === seat) {
-      if (isWinningHand(p.hand, p.melds)) {
+      if (isWinningHand(p.hand, p.melds, this.winOpts)) {
+        // 明槓（大明槓／加槓）補的牌不能自摸，僅暗槓可以
+        if (this.blockTsumoThisDraw) { this.emitState(`${p.name} 明槓補牌，此張不能自摸`); return; }
         if (p.guoShui) { this.emitState(`${p.name} 過水中，不能自摸`); return; }
         this.clearTurnTimer();
         return this.declareWin(seat, this.drawnTile || p.hand[p.hand.length - 1], true);
       }
       return this.falseHu(seat);
     }
-    // 索取階段（別人打牌）
+    // 索取階段（別人打牌）：這才是真正「面對一張牌決定要不要胡」的時刻
     if (this.phase === 'claim' && this.claimWindow) {
       const ent = this.claimWindow.eligible[seat];
       if (ent && ent.hu) return this.submitClaim(seat, { action: 'hu' });
       const t = this.claimWindow.tile;
-      if (isWinningHand(p.hand.concat([t]), p.melds)) {
+      if (isWinningHand(p.hand.concat([t]), p.melds, this.winOpts)) {
         this.emitState(`${p.name} 過水中，不能胡`);
         return;
       }
       return this.falseHu(seat);
     }
-    // 其他時機亂按 → 詐胡
-    return this.falseHu(seat);
+    // 其他時機（不是你的回合、也沒有正在等你決定的牌）：
+    // 例如反應窗口已過、輪到別家——此時按胡鈕不處罰，只提示，
+    // 避免因為看不到提示、反應晚一點就被誤判詐胡
+    this.emitState(`${p.name} 目前沒有可以宣告的胡牌`);
   }
 
   /** 莊家額外台數（莊家 1 台 + 連莊 2n 台） */
@@ -804,7 +858,7 @@ class GameEngine {
         seat: s.seat, name: s.name, isAI: s.isAI,
         handCount: s.hand.length, hand: s.hand,
         melds: s.melds, flowers: s.flowers, discards: s.discards, score: s.score,
-        guoShui: s.guoShui,
+        guoShui: s.guoShui, kuikaeForbidden: s.kuikaeForbidden || [],
       })),
     };
   }

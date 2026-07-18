@@ -179,13 +179,14 @@ function isLiGu(hand, melds = []) {
  * melds: 已亮面子陣列 [{type:'pong'|'chi'|'kong', tiles:[...]}]
  * 需要暗牌拆成 (5 - melds數) 個面子 + 1 對；或門清哩咕（八對半）
  */
-function isWinningHand(hand, melds = []) {
+function isWinningHand(hand, melds = [], opts = {}) {
   const concealed = hand.filter(t => !isFlower(t));
   const needMelds = 5 - melds.length;
   if (needMelds < 0) return false;
   // 暗牌張數必須是 needMelds*3 + 2
   if (concealed.length !== needMelds * 3 + 2) return false;
   if (canWinConcealed(concealed)) return true;
+  if (opts.allowLiGu === false) return false;
   return isLiGu(hand, melds);
 }
 
@@ -256,7 +257,7 @@ function allTileTypes() {
  * hand: 暗牌（不含花），melds: 已亮面子
  * 回傳可胡的牌陣列（可能為空 = 未聽牌）
  */
-function getTingTiles(hand, melds = []) {
+function getTingTiles(hand, melds = [], opts = {}) {
   const concealed = hand.filter(t => !isFlower(t));
   const needMelds = 5 - melds.length;
   if (concealed.length !== needMelds * 3 + 1) return [];
@@ -266,7 +267,7 @@ function getTingTiles(hand, melds = []) {
     const already = concealed.filter(x => x === t).length
       + melds.reduce((a, m) => a + m.tiles.filter(x => x === t).length, 0);
     if (already >= 4) continue;
-    if (isWinningHand(concealed.concat([t]), melds)) waits.push(t);
+    if (isWinningHand(concealed.concat([t]), melds, opts)) waits.push(t);
   }
   return waits;
 }
@@ -354,7 +355,7 @@ function scoreHand(ctx) {
   const concealedWin = ctx.concealedWin; // 門清（無吃碰明槓）
 
   /* --- 哩咕（八對半：7對+1刻，門清限定；本身不再計門清台） --- */
-  const liGu = isLiGu(fullHand, ctx.melds || []);
+  const liGu = ctx.allowLiGu !== false && isLiGu(fullHand, ctx.melds || []);
   if (liGu) add('哩咕(八對半)', 8);
 
   /* --- 基本 --- */
@@ -378,7 +379,7 @@ function scoreHand(ctx) {
   if (ctx.diceBonus && ctx.diceBonus.tai > 0) add('骰運·' + ctx.diceBonus.name, ctx.diceBonus.tai);
 
   /* --- 聽牌型分析（平胡/中洞/邊張/單吊 共用）--- */
-  const winWaits = getTingTiles(ctx.hand, ctx.melds || []);
+  const winWaits = getTingTiles(ctx.hand, ctx.melds || [], { allowLiGu: ctx.allowLiGu !== false });
 
   /* --- 花牌：只算「正花」（對應自己門風的花） ---
    * 門風 0東→春(f1)梅(f5)，1南→夏(f2)蘭(f6)，2西→秋(f3)竹(f7)，3北→冬(f4)菊(f8) */
