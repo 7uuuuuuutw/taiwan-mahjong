@@ -346,7 +346,15 @@ input[type=text] {
 @keyframes pulse { 50% { box-shadow: 0 0 24px var(--gold); } }
 
 .seat-hand { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
-.seat-left .seat-hand, .seat-right .seat-hand { flex-direction: row; flex-wrap: wrap; }
+/* 左右家：直立單排牌背，不分螢幕寬度都不換行——避免窄螢幕手機上手牌
+   被擠成好幾直行/列的網格，版面亂掉。滿手 16~17 張牌時欄位可能裝不下，
+   直接讓牌視覺上延伸到玩家(下)／對家(上)那側的空間即可（反正那兩塊
+   跟左右家本來就沒有真的排版衝突），不要用捲動或換行把牌截斷藏起來。 */
+.seat-left .seat-hand, .seat-right .seat-hand {
+  flex-direction: column; flex-wrap: nowrap; gap: 1px;
+  align-items: flex-start; justify-content: center;
+}
+.seat-right .seat-hand { align-items: flex-end; }
 
 /* 側家（左/右）牌縮小，避免撐破窄欄 */
 .seat-left .tile, .seat-right .tile,
@@ -824,16 +832,8 @@ input[type=text] {
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ---------- 電腦版：三家整排牌背，不做階梯錯位（維持平整矩形排列） ---------- */
+/* ---------- 電腦版：牌背尺寸較大（桌機空間充足） ---------- */
 @media (min-width: 641px) {
-  /* 左右家：直立一排牌背。滿手 16~17 張牌時欄位可能裝不下，直接讓牌
-     視覺上延伸到玩家(下)／對家(上)那側的空間即可（反正那兩塊跟左右家
-     本來就沒有真的排版衝突），不要用捲動把牌截斷藏起來。 */
-  .seat-left .seat-hand, .seat-right .seat-hand {
-    flex-direction: column; flex-wrap: nowrap; gap: 1px;
-    align-items: flex-start; justify-content: center;
-  }
-  .seat-right .seat-hand { align-items: flex-end; }
   .seat-left .tile-back-left, .seat-right .tile-back-right { width: 48px; height: 18px; }
 }
 
