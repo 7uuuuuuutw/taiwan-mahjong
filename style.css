@@ -300,19 +300,24 @@ input[type=text] {
 .seat-right .seat-extras .seat-flowers:not(:empty) {
   border-right: none; padding-right: 0;
 }
-/* 上家：面子/花牌的牌本身轉 90 度橫躺（整張牌變寬扁，不只文字轉向）。
-   transform 不影響版面量測的盒子大小——旋轉後視覺上是 35x26（橫的），
-   但版面仍照原本 26x35（直的）占位，垂直方向會多出 (35-26)=9px 的
-   視覺空隙，牌跟牌之間看起來鬆散不貼齊。用等量負 margin 把多出來的
-   占位吃掉，才會緊密排列。 */
-.seat-left .seat-melds .tile, .seat-left .seat-flowers .tile {
-  transform: rotate(90deg);
+/* 上家在桌子左側、中央在其右方，轉 90 度（順時針）會讓文字「上方」
+   （原本朝上的那端）轉向右——正好朝向中央。
+   下家在桌子右側、中央在其左方，要讓文字上方一樣朝向中央，得轉
+   -90 度（逆時針），跟上家鏡射對稱，不是轉 180 度（180 度只是原地
+   上下顛倒，文字上方會朝外、背對中央，不對）。
+   兩者都是「橫躺」（整張牌變寬扁，不只文字轉向）：transform 不影響版面
+   量測的盒子大小——旋轉後視覺上是 35x26（橫的），但版面仍照原本 26x35
+   （直的）占位，垂直方向會多出 (35-26)=9px 的視覺空隙，牌跟牌之間看
+   起來鬆散不貼齊。用等量負 margin 把多出來的占位吃掉，才會緊密排列。 */
+.seat-left .seat-melds .tile, .seat-left .seat-flowers .tile,
+.seat-right .seat-melds .tile, .seat-right .seat-flowers .tile {
   margin-top: -4.5px; margin-bottom: -4.5px;
 }
-/* 下家：轉 180 度（原地翻轉，牌型仍是直的 26x35，不像 90 度會變寬扁），
-   版面占位跟旋轉前完全一致，不需要額外的負 margin 補償。 */
+.seat-left .seat-melds .tile, .seat-left .seat-flowers .tile {
+  transform: rotate(90deg);
+}
 .seat-right .seat-melds .tile, .seat-right .seat-flowers .tile {
-  transform: rotate(180deg);
+  transform: rotate(-90deg);
 }
 
 /* 花牌與吃碰面子同排並列（省空間），中間用一條細線區隔兩組 */
