@@ -1215,7 +1215,6 @@ function showTurnActions(payload) {
   else stopUiTimer();
   const bar = document.getElementById('action-bar');
   bar.innerHTML = '';
-  bar.style.display = 'flex';
 
   const a = payload.actions;
   // 自摸不提示：玩家須自行判斷並按右下角常駐「胡」鈕
@@ -1236,6 +1235,8 @@ function showTurnActions(payload) {
     hint.textContent = '👆 拖曳牌到中央打出（或輕點）';
     bar.appendChild(hint);
   }
+  // 沒有任何按鈕/提示要顯示時，整條列直接收起來，不留空格子佔位
+  bar.style.display = bar.children.length ? 'flex' : 'none';
 }
 
 function showClaimOffer(payload) {

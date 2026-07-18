@@ -394,8 +394,9 @@ class GameEngine {
 
     // AI 回應；人類只收到「吃碰槓」選項——胡牌永不提示，
     // 玩家須自行判斷並按常駐「胡」鈕（declareHuAttempt 會對照內部 eligible）
-    // 若打牌者是真人，電腦的吃碰槓刻意延遲一下，讓大家能看清楚那張牌
-    const discarderIsHuman = !this.seats[from].isAI;
+    // 電腦的吃碰槓一律延遲一下才動作（不分打牌者是真人或電腦），讓那張牌先
+    // 真的在畫面中央顯示出來一拍，避免同步瞬間解決導致畫面根本沒機會繪出、
+    // 排版跳動的問題
     let anyVisibleHuman = false;
     for (const seatStr of Object.keys(eligible)) {
       const seat = +seatStr;
@@ -405,13 +406,9 @@ class GameEngine {
           { hu: eligible[seat].hu, pong: eligible[seat].pong, kong: eligible[seat].kong,
             chi: eligible[seat].chi, chiOptions: eligible[seat].chiOptions },
           { style: p.aiStyle }, this.aiLevel);
-        if (discarderIsHuman) {
-          const [lo, hi] = AI_CLAIM_DELAY_MS;
-          const delay = lo + Math.random() * (hi - lo);
-          setTimeout(() => { if (!this.dead) this.submitClaim(seat, decision); }, delay);
-        } else {
-          this.submitClaim(seat, decision);
-        }
+        const [lo, hi] = AI_CLAIM_DELAY_MS;
+        const delay = lo + Math.random() * (hi - lo);
+        setTimeout(() => { if (!this.dead) this.submitClaim(seat, decision); }, delay);
       } else {
         const visible = { ...eligible[seat] };
         delete visible.hu; // 隱藏胡牌提示
