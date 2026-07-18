@@ -254,6 +254,7 @@ class GameEngine {
       from: fromSeat,
       scores: this.seats.map(s => s.score),
       dealerWin: robberSeat === this.dealer,
+      roundEnding: this.willCompleteFullRound(robberSeat === this.dealer),
       baseDi: this.baseDi, baseTai: this.baseTai,
     });
     this.emitState(`${robber.name} 七搶一！`);
@@ -750,6 +751,7 @@ class GameEngine {
       result: 'win', winners: [w], from: loser,
       scores: this.seats.map(s => s.score),
       dealerWin: seat === this.dealer,
+      roundEnding: this.willCompleteFullRound(seat === this.dealer),
       baseDi: this.baseDi, baseTai: this.baseTai,
     });
     this.emitState('本局結束');
@@ -771,6 +773,7 @@ class GameEngine {
       multiShot: winners.length >= 3 ? '一炮三響' : (winners.length === 2 ? '一炮雙響' : null),
       scores: this.seats.map(s => s.score),
       dealerWin,
+      roundEnding: this.willCompleteFullRound(dealerWin),
       baseDi: this.baseDi, baseTai: this.baseTai,
     });
     this.emitState('本局結束');
@@ -806,6 +809,7 @@ class GameEngine {
       result: 'falseHu', offender: seat, estTai, payments,
       scores: this.seats.map(s => s.score),
       dealerWin: false,
+      roundEnding: this.willCompleteFullRound(false),
       baseDi: this.baseDi, baseTai: this.baseTai,
     });
     this.emitState(`${p.name} 詐胡！`);
@@ -880,6 +884,12 @@ class GameEngine {
 
   /** 莊家額外台數（莊家 1 台 + 連莊 2n 台） */
   dealerExtraTai() { return 1 + this.dealerStreak * 2; }
+
+  /** 這局結束後，若莊家不連莊、且目前正好是北圈(roundWind===3)的北家(3)在坐莊，
+   *  代表東南西北一將剛好在這局結束後打完一整圈。 */
+  willCompleteFullRound(dealerWin) {
+    return !dealerWin && this.dealer === 3 && this.roundWind === 3;
+  }
 
   /** 分數結算：(底 + 台×台值) × 骰運倍數（豹子×3）
    * 自摸三家各付；非莊家自摸時，莊家那份要多付「莊家+連莊」台。

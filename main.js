@@ -1395,15 +1395,16 @@ function renderHandOverModal(payload) {
   const body = document.getElementById('result-body');
   const seatName = (i) => lastView ? lastView.seats[i].name : '玩家' + (i + 1);
   const di = payload.baseDi || 30, taiV = payload.baseTai || 10;
+  const roundBanner = payload.roundEnding ? '<div class="round-complete-banner">🀄 東南西北一將已完成！</div>' : '';
 
   if (payload.result === 'draw') {
     Sound.draw_game();
-    body.innerHTML = `<h2>流局</h2><p>牌牆摸完，無人胡牌。</p>` + scoreTable(payload.scores);
+    body.innerHTML = roundBanner + `<h2>流局</h2><p>牌牆摸完，無人胡牌。</p>` + scoreTable(payload.scores);
   } else if (payload.result === 'falseHu') {
     Sound.draw_game();
     const payRows = payload.payments.map(pm =>
       `<li>賠 ${escapeHtml(seatName(pm.to))} <b>${pm.value}</b> 籌碼</li>`).join('');
-    body.innerHTML = `
+    body.innerHTML = roundBanner + `
       <h2>💥 ${escapeHtml(seatName(payload.offender))} 詐胡！</h2>
       <p class="win-way">牌未成卻宣告胡牌，依最接近的聽牌（${payload.estTai} 台）賠付各家，並讓出莊位。</p>
       <div class="tai-list"><ul>${payRows}</ul></div>
@@ -1432,7 +1433,7 @@ function renderHandOverModal(payload) {
           <ul class="tai-items">${items || '<li>無台（屁胡）</li>'}</ul>
         </div>`;
     }).join('');
-    body.innerHTML = `
+    body.innerHTML = roundBanner + `
       ${payload.multiShot ? `<h2 class="multi-shot">🔥 ${payload.multiShot}！${escapeHtml(seatName(payload.from))} 放槍賠多家</h2>` : ''}
       ${blocks}
       ${scoreTable(payload.scores)}

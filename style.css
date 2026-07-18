@@ -743,6 +743,10 @@ input[type=text] {
 .reveal-sep { color: #9ec3ac; margin: 0 4px; }
 .tai-items { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .85rem; margin-bottom: 6px; }
 .multi-shot { color: #ff8a80; margin-bottom: 10px; }
+.round-complete-banner {
+  font-size: 1.6rem; font-weight: 900; text-align: center; color: var(--gold);
+  margin-bottom: 14px; text-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
 .score-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
 .score-table th, .score-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,.12); }
 .score-table th { color: var(--gold); font-weight: 600; letter-spacing: 2px; }
