@@ -141,13 +141,18 @@ function maybeCommentOn(subjectSeat, event, chance = 1) {
 
 /* ---------- 特殊情境對話（觀察局勢觸發，非每角色皆有，每局各項最多說一次） ---------- */
 let specialFired = new Set();          // 本局已觸發過的項目key
-let specialLastHandSig = null;         // 判斷是否已進入新的一局
+let specialLastHandSig = null;         // 判斷是否已進入新的一局（用 rollId，每局擲骰時才會變）
 let skipStreak = [0, 0, 0, 0];         // 各家「本該摸牌卻被碰/槓跳過」連續次數
 let lastDiscardFrom = null;            // 追蹤最近一次棄牌者（供判斷碰/槓是否跳過摸牌順位）
 
 function resetSpecialDialogueIfNewHand(view) {
-  const sig = view.seats.reduce((a, s) => a + (s.discards ? s.discards.length : 0), 0);
-  if (specialLastHandSig !== null && sig < specialLastHandSig) {
+  // 注意：不能用「總棄牌數」當作換局訊號——吃/碰/槓會把被吃的那張牌從
+  // 棄牌紀錄裡 pop 掉（見 game.js 的 discards.pop()），總棄牌數在同一局
+  // 內反而會變少，誤判成「換局」而重置 specialFired，導致同一句台詞
+  // （例如 honorBadLuck）在同一局內被吃碰觸發好幾次重複講。改用 rollId
+  // （每局開局擲骰才 +1，同一局內恆定不變）才是真正可靠的換局訊號。
+  const sig = view.rollId || 0;
+  if (specialLastHandSig !== null && sig !== specialLastHandSig) {
     specialFired = new Set();
     skipStreak = [0, 0, 0, 0];
     lastDiscardFrom = null;
