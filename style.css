@@ -293,13 +293,22 @@ input[type=text] {
 .seat-left .seat-flowers, .seat-right .seat-flowers { flex-direction: column; align-content: start; }
 .seat-right .seat-flowers { align-items: flex-end; }
 /* 側家花牌獨立一行，不需要橫排並列時的分隔線 */
-.seat-left .seat-flowers:not(:empty), .seat-right .seat-flowers:not(:empty) {
+/* 用 .seat-extras 前綴把選擇器拉到 3 個 class，蓋過下面同排並列版本
+   的分隔線規則（那條規則也是 2 個 class，光靠後寫贏不了，特殊度打平
+   時看的是「後寫的贏」，之前這裡沒加前綴就是這樣被蓋掉的）。 */
+.seat-left .seat-extras .seat-flowers:not(:empty),
+.seat-right .seat-extras .seat-flowers:not(:empty) {
   border-right: none; padding-right: 0;
 }
-/* 面子/花牌的牌本身轉 90 度橫躺（整張牌變寬扁，不只文字轉向）。 */
+/* 面子/花牌的牌本身轉 90 度橫躺（整張牌變寬扁，不只文字轉向）。
+   transform 不影響版面量測的盒子大小——旋轉後視覺上是 35x26（橫的），
+   但版面仍照原本 26x35（直的）占位，垂直方向會多出 (35-26)=9px 的
+   視覺空隙，牌跟牌之間看起來鬆散不貼齊。用等量負 margin 把多出來的
+   占位吃掉，才會緊密排列。 */
 .seat-left .seat-melds .tile, .seat-left .seat-flowers .tile,
 .seat-right .seat-melds .tile, .seat-right .seat-flowers .tile {
   transform: rotate(90deg);
+  margin-top: -4.5px; margin-bottom: -4.5px;
 }
 
 /* 花牌與吃碰面子同排並列（省空間），中間用一條細線區隔兩組 */
