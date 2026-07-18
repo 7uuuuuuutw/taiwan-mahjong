@@ -260,30 +260,35 @@ input[type=text] {
 /* 左右家（上家/下家）：面子與花牌放在手牌「前方」（面向桌心那一側）—
  * 上家(左)在手牌右側、下家(右)在手牌左側。不分螢幕寬度都要套用這個
  * 位置關係，只有牌本身的階梯視覺效果才留給桌機專屬區塊處理。
- * .seat-extras 僅作 HTML 包裹用，display:contents 讓花牌／面子直接
- * 成為 .seat-left/.seat-right 的網格項目。 */
+ * 注意：hand 絕不能和 melds/flowers 共用同一組網格列再各自 span——
+ * 手牌疊高（13~14 張）時，網格會把 hand 的高度硬塞進共用的列軌，
+ * 連帶把 melds/flowers 所在的列撐到遠超實際內容高度，導致花牌被
+ * 擠到版面最下方。這裡改成 hand 與 extras 各佔一個獨立網格格，
+ * extras 內部用 flex 直排 melds+flowers，靠 align-self 置中即可。 */
 .seat-left, .seat-right {
   display: grid; width: 175px; gap: 4px 10px; flex-shrink: 0;
   align-content: center; justify-content: center;
 }
-.seat-left .seat-extras, .seat-right .seat-extras { display: contents; }
 .seat-left {
-  grid-template-areas: "info info" "hand melds" "hand flowers";
+  grid-template-areas: "info info" "hand extras";
   grid-template-columns: auto auto;
 }
 .seat-right {
-  grid-template-areas: "info info" "melds hand" "flowers hand";
+  grid-template-areas: "info info" "extras hand";
   grid-template-columns: auto auto;
 }
 .seat-left .seat-info, .seat-right .seat-info { grid-area: info; justify-self: center; }
 .seat-left .seat-hand, .seat-right .seat-hand { grid-area: hand; }
-.seat-left .seat-melds, .seat-right .seat-melds {
-  grid-area: melds; flex-direction: column; align-items: flex-start; align-self: end;
+.seat-left .seat-extras, .seat-right .seat-extras {
+  grid-area: extras; display: flex; flex-direction: column; gap: 4px;
+  align-self: center; max-width: 118px;
 }
+.seat-left .seat-extras { align-items: flex-start; }
+.seat-right .seat-extras { align-items: flex-end; }
+.seat-left .seat-melds, .seat-right .seat-melds { flex-direction: column; }
+.seat-left .seat-melds { align-items: flex-start; }
 .seat-right .seat-melds { align-items: flex-end; }
-.seat-left .seat-flowers, .seat-right .seat-flowers {
-  grid-area: flowers; align-content: start; align-self: start; max-width: 118px;
-}
+.seat-left .seat-flowers, .seat-right .seat-flowers { align-content: start; }
 /* 側家花牌獨立一行，不需要橫排並列時的分隔線 */
 .seat-left .seat-flowers:not(:empty), .seat-right .seat-flowers:not(:empty) {
   border-right: none; padding-right: 0;
@@ -452,7 +457,9 @@ input[type=text] {
   box-shadow: 0 2px 3px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.25);
 }
 .tile-back-top, .tile-back-bottom { width: 26px; height: 36px; }
-.tile-back-left, .tile-back-right { width: 34px; height: 22px; }
+/* 用 .seat-left/.seat-right 前綴提高優先度，蓋過上面 .seat-left .tile 的通用尺寸，
+   否則側家牌背會被撐成一般直立牌的高度（46px），一疊 13～14 張直接爆版面 */
+.seat-left .tile-back-left, .seat-right .tile-back-right { width: 34px; height: 22px; }
 .concealed-kong .tile:first-child, .concealed-kong .tile:last-child { background: var(--tb1); }
 
 /* ---------- 棄牌池 ---------- */
@@ -789,7 +796,7 @@ input[type=text] {
     align-items: flex-start; justify-content: center;
   }
   .seat-right .seat-hand { align-items: flex-end; }
-  .tile-back-left, .tile-back-right { width: 36px; height: 15px; }
+  .seat-left .tile-back-left, .seat-right .tile-back-right { width: 36px; height: 15px; }
   .tile-back-left { transform: translateX(calc(var(--i, 0) * 2.4px)); }
   .tile-back-right { transform: translateX(calc(var(--i, 0) * -2.4px)); }
   /* 對家：橫排牌背逐張下移 */
