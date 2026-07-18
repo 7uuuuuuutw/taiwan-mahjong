@@ -203,7 +203,6 @@ input[type=text] {
   font-size: .85rem; flex-wrap: wrap;
 }
 .info-bar span { color: var(--gold); }
-.info-msg { color: #fff !important; opacity: .85; }
 .info-bar .mini-btn { margin-left: auto; }
 .info-timer {
   color: #fff !important; font-weight: 800; background: rgba(0,0,0,.35);

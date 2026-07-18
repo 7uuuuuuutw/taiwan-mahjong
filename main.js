@@ -845,7 +845,6 @@ function renderView(view) {
   document.getElementById('info-wall').textContent = '剩 ' + view.wallLeft + ' 張';
   document.getElementById('info-dealer').textContent = '莊：' + view.seats[view.dealer].name
     + (view.dealerStreak > 0 ? `（連${view.dealerStreak}）` : '');
-  if (view.stateMessage) document.getElementById('info-msg').textContent = view.stateMessage;
 
   // 四個方位：以自己為 bottom，順時針 next=right...
   for (let i = 0; i < 4; i++) {
