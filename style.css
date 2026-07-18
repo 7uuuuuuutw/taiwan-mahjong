@@ -796,13 +796,16 @@ input[type=text] {
 /* ---------- 電腦版：三家「整排牌」以階梯錯位排成平行四邊形 ----------
  * 每張牌保持矩形，依序號 --i 平移固定距離，整排輪廓即為平行四邊形。 */
 @media (min-width: 641px) {
-  /* 左右家：直立一排牌背，逐張向桌心方向平移 */
+  /* 左右家：直立一排牌背，逐張向桌心方向平移。
+     min-height:0 + overflow-y:auto 是保險——滿手 16~17 張牌時，欄位可用高度
+     很緊繃，牌背調大後萬一裝不下，讓它在自己欄位內捲動，不要撐爆版面。 */
   .seat-left .seat-hand, .seat-right .seat-hand {
     flex-direction: column; flex-wrap: nowrap; gap: 1px;
     align-items: flex-start; justify-content: center;
+    min-height: 0; overflow-y: auto; overflow-x: hidden;
   }
   .seat-right .seat-hand { align-items: flex-end; }
-  .seat-left .tile-back-left, .seat-right .tile-back-right { width: 36px; height: 15px; }
+  .seat-left .tile-back-left, .seat-right .tile-back-right { width: 48px; height: 18px; }
   .tile-back-left { transform: translateX(calc(var(--i, 0) * 2.4px)); }
   .tile-back-right { transform: translateX(calc(var(--i, 0) * -2.4px)); }
   /* 對家：橫排牌背逐張下移 */
