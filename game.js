@@ -127,28 +127,41 @@ class GameEngine {
     setTimeout(() => { if (!this.dead) this.dealAndBegin(); }, DICE_SETTLE_MS);
   }
 
-  /** 發牌動畫：各家自莊家起輪流每次抓 4 張（共 4 輪），再依序補花。
-   *  純演出、由電腦自動進行，玩法不變。 */
+  /** 發牌動畫：先讓莊家「開門」抓第一張牌，這張抓完、畫面演出後，
+   *  才開始其他玩家（含莊家剩餘的牌）依序補牌抓滿（共 4 輪，每步 4 張），
+   *  最後補花。純演出、由電腦自動進行，玩法不變。 */
   dealAndBegin() {
     const deck = shuffle(buildDeck(), () => this.rng());
     this.wall = deck;
     this.wallReserve = WALL_RESERVE; // 每局重設保留區（開槓會 +1）
-    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.kuikaeForbidden = null; }
+    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.kuikaeForbidden = null; p.qiangYiFlower = false; }
+    this.flowerPool = new Set(); // 每局重設「七搶一」的全桌花牌進度追蹤
     this.phase = 'dealing';
 
-    // 抓牌步驟：4 輪 × 4 家，每步抓 4 張
-    const steps = [];
-    for (let r = 0; r < 4; r++) {
-      for (let k = 0; k < 4; k++) steps.push((this.dealer + k) % 4);
+    // 開門：莊家先抓 1 張，讓玩家看到「開門」這個動作獨立演出一拍
+    const dealerP = this.seats[this.dealer];
+    dealerP.hand.push(this.drawFront());
+    this.emitState(`${dealerP.name} 開門`);
+    setTimeout(() => this.dealRestAfterOpening(), 320);
+  }
+
+  dealRestAfterOpening() {
+    if (this.dead) return;
+    // 開門後才開始其他家補牌：莊家先前已抓 1 張，這裡補足剩下 3 張湊滿第一輪；
+    // 其餘三家與後續 3 輪維持每步 4 張
+    const steps = [{ seat: this.dealer, count: 3 }];
+    for (let k = 1; k < 4; k++) steps.push({ seat: (this.dealer + k) % 4, count: 4 });
+    for (let r = 1; r < 4; r++) {
+      for (let k = 0; k < 4; k++) steps.push({ seat: (this.dealer + k) % 4, count: 4 });
     }
     const dealStep = (i) => {
       if (this.dead) return;
       if (i >= steps.length) return this.flowerPhase(0);
-      const seat = steps[i];
+      const { seat, count } = steps[i];
       const p = this.seats[seat];
-      for (let j = 0; j < 4; j++) p.hand.push(this.drawFront());
+      for (let j = 0; j < count; j++) p.hand.push(this.drawFront());
       p.hand = sortTiles(p.hand);
-      this.emitState(`${p.name} 抓牌（第 ${Math.floor(i / 4) + 1} 輪）`);
+      this.emitState(`${p.name} 抓牌`);
       setTimeout(() => dealStep(i + 1), 230);
     };
     dealStep(0);
@@ -189,6 +202,7 @@ class GameEngine {
       changed = false;
       for (let i = 0; i < p.hand.length; i++) {
         if (isFlower(p.hand[i])) {
+          this.trackFlowerDraw(seat, p.hand[i]);
           p.flowers.push(p.hand[i]);
           p.hand.splice(i, 1);
           if (this.drawableCount() > 0) p.hand.push(this.drawBack());
@@ -200,6 +214,17 @@ class GameEngine {
     p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
   }
 
+  /** 追蹤全桌花牌抓取進度，供「七搶一」判定：8 種花全被抓走時，
+   *  抓到最後一種（第 8 種）的那家得 7 搶 1（不論是不是自己門風的花）。 */
+  trackFlowerDraw(seat, tile) {
+    if (!this.flowerPool) this.flowerPool = new Set();
+    const num = parseInt(tile.slice(1), 10);
+    if (!this.flowerPool.has(num)) {
+      this.flowerPool.add(num);
+      if (this.flowerPool.size === 8) this.seats[seat].qiangYiFlower = true;
+    }
+  }
+
   /* -------- 摸牌階段 -------- */
   doDrawPhase() {
     if (this.drawableCount() <= 0) return this.drawnGame();
@@ -207,6 +232,7 @@ class GameEngine {
     let tile = this.drawFront();
     // 補花（自摸到花 → 記錄，從牌尾補）
     while (isFlower(tile)) {
+      this.trackFlowerDraw(this.turn, tile);
       p.flowers.push(tile);
       p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
       if (this.drawableCount() <= 0) return this.drawnGame();
@@ -333,6 +359,7 @@ class GameEngine {
     const p = this.seats[seat];
     let tile = this.drawBack();
     while (isFlower(tile)) {
+      this.trackFlowerDraw(seat, tile);
       p.flowers.push(tile);
       if (this.drawableCount() <= 0) return this.drawnGame();
       tile = this.drawBack();
@@ -428,9 +455,42 @@ class GameEngine {
   submitClaim(seat, decision) {
     if (!this.claimWindow || !this.claimWindow.eligible[seat]) return;
     this.claimWindow.responses[seat] = decision || { action: 'pass' };
-    const eligibleCount = Object.keys(this.claimWindow.eligible).length;
-    const respCount = Object.keys(this.claimWindow.responses).length;
-    if (respCount >= eligibleCount) this.resolveClaims();
+    this.maybeResolveClaims();
+  }
+
+  /** 提前結算索取視窗：胡的人不用等吃碰的人決定；碰/槓的人也不用等吃的人決定——
+   * 但只要還有「可能胡」的位置沒回應，就必須繼續等（胡可能多家同時成立，一炮
+   * 雙響/三響要收齊才能判斷），且碰/槓的優先序（依打牌者順下第 1/2/3 家）也要
+   * 先確認沒有更優先的位置還沒表態，才能提前結算。 */
+  maybeResolveClaims() {
+    const cw = this.claimWindow;
+    if (!cw) return;
+    const { from, eligible, responses } = cw;
+    const eligibleSeats = Object.keys(eligible).map(Number);
+    const pending = eligibleSeats.filter(s => !(s in responses));
+    if (pending.length === 0) return this.resolveClaims();
+
+    // 還有「可能胡」的位置沒回應 → 必須繼續等（胡的優先序最高，且可多家同胡）
+    if (pending.some(s => eligible[s].hu)) return;
+
+    // 所有可能胡的位置都回應了；只要有人選擇胡，其餘吃碰決定已不重要，直接結算
+    const anyHu = eligibleSeats.some(s => responses[s] && responses[s].action === 'hu');
+    if (anyHu) return this.resolveClaims();
+
+    // 沒人胡。看碰/槓：依打牌者順下第 1/2/3 家的優先序，找出目前最優先、已確定要
+    // 碰/槓的位置；只要比它更優先（順序更前）的碰/槓資格位置都已回應，就能提前
+    // 結算（不必等吃的人決定，因為碰/槓一定贏過吃）。
+    const order = [1, 2, 3].map(k => (from + k) % 4).filter(s => eligible[s]);
+    const pongKongIdx = order.findIndex(s => {
+      const r = responses[s];
+      return r && (r.action === 'pong' || r.action === 'kong');
+    });
+    if (pongKongIdx >= 0) {
+      const higherPriorityPending = order.slice(0, pongKongIdx).some(s =>
+        (eligible[s].pong || eligible[s].kong) && !(s in responses));
+      if (!higherPriorityPending) return this.resolveClaims();
+    }
+    // 否則（只剩吃有可能成立，或碰/槓優先序尚未確認）→ 繼續等
   }
 
   forceResolveClaims() {
@@ -474,7 +534,10 @@ class GameEngine {
 
     if (huSeats.length > 0) {
       this.robbingKong = robbing;
-      return this.multiWin(huSeats, tile, from);
+      // 一炮雙響：僅打牌順序最接近打牌者的那家胡牌（huSeats 已依順下 1/2/3 家排序）；
+      // 一炮三響（三家全胡）維持三家都胡
+      const finalHuSeats = huSeats.length === 2 ? [huSeats[0]] : huSeats;
+      return this.multiWin(finalHuSeats, tile, from);
     }
     this.robbingKong = false;
 
@@ -508,7 +571,8 @@ class GameEngine {
         // 碰完不能立刻打出剛碰的那張牌（喰い替え限制）
         p.kuikaeForbidden = [tile];
         this.emitState(`${p.name} 碰`);
-        const actions = { discard: true, tsumo: false, concealedKongs: findConcealedKongs(p.hand), addKongs: [] };
+        // 暗槓只能在「自己摸牌那輪」宣告；碰完立刻要打牌，不提供暗槓選項
+        const actions = { discard: true, tsumo: false, concealedKongs: [], addKongs: [] };
         if (p.isAI) this.aiSelfAct(seat, null, actions);
         else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile: null, actions, timeLimit: this.turnLimitMs / 1000 }); }
         return;
@@ -531,7 +595,8 @@ class GameEngine {
       // 吃完不能立刻打出會讓這口吃變得「白吃」的牌（喰い替え限制）
       p.kuikaeForbidden = this.computeKuikaeForbidden(tile, use);
       this.emitState(`${p.name} 吃`);
-      const actions = { discard: true, tsumo: false, concealedKongs: findConcealedKongs(p.hand), addKongs: [] };
+      // 暗槓只能在「自己摸牌那輪」宣告；吃完立刻要打牌，不提供暗槓選項
+      const actions = { discard: true, tsumo: false, concealedKongs: [], addKongs: [] };
       if (p.isAI) this.aiSelfAct(seat, null, actions);
       else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile: null, actions, timeLimit: this.turnLimitMs / 1000 }); }
       return;
@@ -619,6 +684,7 @@ class GameEngine {
       concealedWin,
       diceBonus: this.diceBonus,
       allowLiGu: this.rules.ligu,
+      qiangYiFlower: !!p.qiangYiFlower,
     };
     const score = scoreHand(ctx);
     score.multiplier = (this.diceBonus && this.diceBonus.mult > 1) ? this.diceBonus.mult : 1;
@@ -627,7 +693,9 @@ class GameEngine {
       score.taiMultiplier = this.diceBonus.taiMult;
       score.total *= this.diceBonus.taiMult;
     }
-    this.settle(seat, score, selfDraw, loser);
+    // 八仙過海（集滿 8 張花）＝胡三家：不論實際是自摸還是胡別人放的牌，
+    // 結算一律比照自摸的三家均付
+    this.settle(seat, score, selfDraw || score.baXian, loser);
     return {
       seat, winTile, selfDraw, score,
       hand: selfDraw ? handMinus : p.hand.slice(), // 亮牌用（不含胡牌張）

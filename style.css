@@ -812,13 +812,12 @@ input[type=text] {
 
 /* ---------- 電腦版：三家整排牌背，不做階梯錯位（維持平整矩形排列） ---------- */
 @media (min-width: 641px) {
-  /* 左右家：直立一排牌背。
-     min-height:0 + overflow-y:auto 是保險——滿手 16~17 張牌時，欄位可用高度
-     很緊繃，牌背調大後萬一裝不下，讓它在自己欄位內捲動，不要撐爆版面。 */
+  /* 左右家：直立一排牌背。滿手 16~17 張牌時欄位可能裝不下，直接讓牌
+     視覺上延伸到玩家(下)／對家(上)那側的空間即可（反正那兩塊跟左右家
+     本來就沒有真的排版衝突），不要用捲動把牌截斷藏起來。 */
   .seat-left .seat-hand, .seat-right .seat-hand {
     flex-direction: column; flex-wrap: nowrap; gap: 1px;
     align-items: flex-start; justify-content: center;
-    min-height: 0; overflow-y: auto; overflow-x: hidden;
   }
   .seat-right .seat-hand { align-items: flex-end; }
   .seat-left .tile-back-left, .seat-right .tile-back-right { width: 48px; height: 18px; }

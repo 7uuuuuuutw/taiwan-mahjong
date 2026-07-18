@@ -392,6 +392,14 @@ function scoreHand(ctx) {
   }
   add('正花', flowerTai);
 
+  /* --- 八仙過海：集滿全部 8 張花（不分正花偏花）。結算比照自摸胡三家，
+   *  由呼叫端依 score.baXian 覆寫 settle() 的付款方式。 --- */
+  const baXian = new Set(flowers.map(f => parseInt(f.slice(1), 10))).size === 8;
+  if (baXian) add('八仙過海', 8);
+
+  /* --- 七搶一：全桌 8 種花牌被抓完的那一刻，剛好是自己抓到最後一種 --- */
+  if (ctx.qiangYiFlower) add('七搶一', 8);
+
   /* --- 牌型台數（需成功拆牌） --- */
   if (decomp) {
     // 花色分析
@@ -508,5 +516,5 @@ function scoreHand(ctx) {
   }
 
   const total = items.reduce((a, x) => a + x.tai, 0);
-  return { total, items };
+  return { total, items, baXian };
 }
