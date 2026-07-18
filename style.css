@@ -504,12 +504,17 @@ input[type=text] {
 .tile.discarded { width: 26px; height: 34px; font-size: 11px; opacity: .95; }
 .tile.just-discarded { box-shadow: 0 0 10px var(--gold); border-color: var(--gold); }
 
-/* ---------- 中央區：剛打出的牌（放大）＋骰盅 ---------- */
+/* ---------- 中央區：剛打出的牌（放大）＋骰盅 ----------
+ * 改用絕對定位、完全脫離棄牌池的網格排版（原本用 grid-row/column 佔格＋
+ * padding-bottom 撐開高度，這個高度會算進第 2 列(2fr)的量測，一旦牌變
+ * 大或骰盅偏移，就會把第 1/3 列（上/下家棄牌區）的可用空間擠壓掉，導致
+ * 曾經打出的牌被排擠。絕對定位後只以骰盅位置(top:55%)為基準往上浮動，
+ * 完全不影響棄牌區網格列高。 */
 .pool-center {
-  grid-row: 2; grid-column: 2;
+  position: absolute; left: 50%; top: 55%;
+  transform: translate(-50%, calc(-100% - 64px)); /* 64px ≈ 骰盅半徑56px + 8px間距，浮在骰盅正上方 */
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; pointer-events: none; align-self: center; justify-self: center;
-  padding-bottom: 118px; /* 讓中央牌位於骰盅上方 */
+  gap: 8px; pointer-events: none;
 }
 
 /* 圓形玻璃骰盅（絕對置中，常駐不重繪） */
