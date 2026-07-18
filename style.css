@@ -285,13 +285,13 @@ input[type=text] {
 }
 .seat-left .seat-extras { align-items: flex-start; }
 .seat-right .seat-extras { align-items: flex-end; }
-/* 面子/花牌內部維持橫排（跟自己手牌掀開後同樣的排法：一整排正常牌），
-   只是整組（.seat-extras）改直排堆疊、靠手牌桌心那一側，不影響牌本身
-   的排列方式，只是位置更靠近中央。 */
+/* 面子/花牌由上而下排列（跟左右家直立的手牌方向一致，不是橫排）。 */
 .seat-left .seat-melds, .seat-right .seat-melds { flex-direction: column; }
 .seat-left .seat-melds { align-items: flex-start; }
 .seat-right .seat-melds { align-items: flex-end; }
-.seat-left .seat-flowers, .seat-right .seat-flowers { align-content: start; }
+.seat-left .meld, .seat-right .meld { flex-direction: column; }
+.seat-left .seat-flowers, .seat-right .seat-flowers { flex-direction: column; align-content: start; }
+.seat-right .seat-flowers { align-items: flex-end; }
 /* 側家花牌獨立一行，不需要橫排並列時的分隔線 */
 .seat-left .seat-flowers:not(:empty), .seat-right .seat-flowers:not(:empty) {
   border-right: none; padding-right: 0;
