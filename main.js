@@ -1295,7 +1295,6 @@ function startUiTimer(seconds) {
   let remain = Math.round(seconds);
   const paint = () => {
     el.textContent = '⏱ ' + remain;
-    el.style.display = 'inline';
     el.classList.toggle('urgent', remain <= 5);
   };
   paint();
@@ -1305,10 +1304,12 @@ function startUiTimer(seconds) {
     paint();
   }, 1000);
 }
+/** 沒有倒數時，計時器格子仍留在上方欄（顯示佔位符號），不整個消失、
+ *  避免上方欄版面因為計時器出現/消失而跳動。 */
 function stopUiTimer() {
   if (uiTimerInterval) { clearInterval(uiTimerInterval); uiTimerInterval = null; }
   const el = document.getElementById('info-timer');
-  if (el) { el.style.display = 'none'; el.classList.remove('urgent'); }
+  if (el) { el.textContent = '⏱ -'; el.classList.remove('urgent'); }
 }
 
 /* ============================================================
