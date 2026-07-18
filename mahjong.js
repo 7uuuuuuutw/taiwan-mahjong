@@ -393,12 +393,12 @@ function scoreHand(ctx) {
   add('正花', flowerTai);
 
   /* --- 八仙過海：集滿全部 8 張花（不分正花偏花）。結算比照自摸胡三家，
-   *  由呼叫端依 score.baXian 覆寫 settle() 的付款方式。 --- */
+   *  由呼叫端依 score.baXian 覆寫 settle() 的付款方式。
+   *  （七搶一是另一種獨立的搶花特殊胡牌，不看牌型、固定 8 台、由抓到
+   *  那張花的人單獨賠付，直接在 game.js 的 robFlowerWin() 結算，
+   *  不經過這個函式。） --- */
   const baXian = new Set(flowers.map(f => parseInt(f.slice(1), 10))).size === 8;
   if (baXian) add('八仙過海', 8);
-
-  /* --- 七搶一：全桌 8 種花牌被抓完的那一刻，剛好是自己抓到最後一種 --- */
-  if (ctx.qiangYiFlower) add('七搶一', 8);
 
   /* --- 牌型台數（需成功拆牌） --- */
   if (decomp) {

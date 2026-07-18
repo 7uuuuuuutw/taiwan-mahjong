@@ -134,7 +134,7 @@ class GameEngine {
     const deck = shuffle(buildDeck(), () => this.rng());
     this.wall = deck;
     this.wallReserve = WALL_RESERVE; // 每局重設保留區（開槓會 +1）
-    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.kuikaeForbidden = null; p.qiangYiFlower = false; }
+    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.kuikaeForbidden = null; }
     this.flowerPool = new Set(); // 每局重設「七搶一」的全桌花牌進度追蹤
     this.phase = 'dealing';
 
@@ -169,7 +169,7 @@ class GameEngine {
 
   /** 補花演出：自莊家起依序補花，補到花的多停一下 */
   flowerPhase(k) {
-    if (this.dead) return;
+    if (this.dead || this.phase === 'over') return; // 七搶一可能在補花途中就把本局結束了
     if (k >= 4) {
       this.turn = this.dealer;
       this.phase = 'draw';
@@ -183,6 +183,7 @@ class GameEngine {
     const p = this.seats[seat];
     const before = p.flowers.length;
     this.replaceFlowers(seat);
+    if (this.phase === 'over') return; // 補花途中觸發七搶一，不再繼續演出
     p.hand = sortTiles(p.hand);
     const got = p.flowers.length - before;
     this.emitState(got > 0 ? `${p.name} 補花 ${got} 張` : `${p.name} 理牌`);
@@ -202,7 +203,7 @@ class GameEngine {
       changed = false;
       for (let i = 0; i < p.hand.length; i++) {
         if (isFlower(p.hand[i])) {
-          this.trackFlowerDraw(seat, p.hand[i]);
+          if (this.trackFlowerDraw(seat, p.hand[i])) return; // 七搶一觸發，本局已結束
           p.flowers.push(p.hand[i]);
           p.hand.splice(i, 1);
           if (this.drawableCount() > 0) p.hand.push(this.drawBack());
@@ -214,15 +215,48 @@ class GameEngine {
     p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
   }
 
-  /** 追蹤全桌花牌抓取進度，供「七搶一」判定：8 種花全被抓走時，
-   *  抓到最後一種（第 8 種）的那家得 7 搶 1（不論是不是自己門風的花）。 */
+  /** 追蹤全桌花牌抓取進度，並判定「七搶一」：若某家已經持有 7 張花，
+   *  這時全桌最後一張（第 8 種）花被別家抓走、準備補花——持有 7 張花的
+   *  那家可以直接搶這張花胡牌（不看牌型，固定 8 台，由抓到這張花的人
+   *  單獨賠付）。回傳 true 表示已觸發搶花胡牌、本局結束，呼叫端要立刻
+   *  return，不能再把這張花加進抓牌者的花牌區（牌已經被搶走了）。 */
   trackFlowerDraw(seat, tile) {
     if (!this.flowerPool) this.flowerPool = new Set();
     const num = parseInt(tile.slice(1), 10);
-    if (!this.flowerPool.has(num)) {
-      this.flowerPool.add(num);
-      if (this.flowerPool.size === 8) this.seats[seat].qiangYiFlower = true;
+    if (this.flowerPool.has(num)) return false; // 只有「全新種類」才可能是最後一張
+    this.flowerPool.add(num);
+    if (this.flowerPool.size === 8) {
+      const robberSeat = this.seats.findIndex((p, i) => i !== seat && p.flowers.length === 7);
+      if (robberSeat >= 0) {
+        this.robFlowerWin(robberSeat, seat, tile);
+        return true;
+      }
     }
+    return false;
+  }
+
+  /** 七搶一結算：不看牌型，固定 8 台，由抓到那張花的人（fromSeat）單獨賠付。 */
+  robFlowerWin(robberSeat, fromSeat, flowerTile) {
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.drawnTile = null;
+    this.phase = 'over';
+    const robber = this.seats[robberSeat];
+    const score = { total: 8, items: [{ name: '七搶一', tai: 8 }], multiplier: 1 };
+    this.settle(robberSeat, score, false, fromSeat);
+    this.winner = { seat: robberSeat, winTile: flowerTile, selfDraw: false, score };
+    this.emit('handOver', {
+      result: 'win',
+      winners: [{
+        seat: robberSeat, winTile: flowerTile, selfDraw: false, score,
+        hand: robber.hand.slice(), melds: robber.melds, flowers: robber.flowers,
+      }],
+      from: fromSeat,
+      scores: this.seats.map(s => s.score),
+      dealerWin: robberSeat === this.dealer,
+      baseDi: this.baseDi, baseTai: this.baseTai,
+    });
+    this.emitState(`${robber.name} 七搶一！`);
   }
 
   /* -------- 摸牌階段 -------- */
@@ -232,7 +266,7 @@ class GameEngine {
     let tile = this.drawFront();
     // 補花（自摸到花 → 記錄，從牌尾補）
     while (isFlower(tile)) {
-      this.trackFlowerDraw(this.turn, tile);
+      if (this.trackFlowerDraw(this.turn, tile)) return; // 七搶一觸發，本局已結束
       p.flowers.push(tile);
       p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
       if (this.drawableCount() <= 0) return this.drawnGame();
@@ -359,7 +393,7 @@ class GameEngine {
     const p = this.seats[seat];
     let tile = this.drawBack();
     while (isFlower(tile)) {
-      this.trackFlowerDraw(seat, tile);
+      if (this.trackFlowerDraw(seat, tile)) return; // 七搶一觸發，本局已結束
       p.flowers.push(tile);
       if (this.drawableCount() <= 0) return this.drawnGame();
       tile = this.drawBack();
@@ -684,7 +718,6 @@ class GameEngine {
       concealedWin,
       diceBonus: this.diceBonus,
       allowLiGu: this.rules.ligu,
-      qiangYiFlower: !!p.qiangYiFlower,
     };
     const score = scoreHand(ctx);
     score.multiplier = (this.diceBonus && this.diceBonus.mult > 1) ? this.diceBonus.mult : 1;
