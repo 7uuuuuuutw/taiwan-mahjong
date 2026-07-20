@@ -16,8 +16,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=58 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=58">
+  <!-- v= 版本號：每次改版把下面所有 v=59 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=59">
 </head>
 <body>
 
@@ -45,7 +45,22 @@
         開房後把 4 碼房號給朋友即可一起玩。<br>
         不滿 4 人時空位由電腦補上。
       </p>
+      <div class="lobby-footer-links">
+        <button id="btn-stats" class="mini-btn ghost">📊 遊玩統計</button>
+        <a id="btn-feedback" class="mini-btn ghost" href="https://github.com/7uuuuuuutw/taiwan-mahjong/issues" target="_blank" rel="noopener">💬 意見回饋</a>
+      </div>
       <p class="credit-line">© 2026 7u</p>
+    </div>
+  </div>
+
+  <!-- ===== 遊玩統計（存在這台裝置的 localStorage，不會跨裝置匯總） ===== -->
+  <div id="stats-modal" class="modal" style="display:none">
+    <div class="modal-card">
+      <h2>📊 遊玩統計</h2>
+      <p class="win-way">統計只存在這台裝置的瀏覽器裡，記錄你參與過的每一局裡，牌桌上任何人達成的大牌型。</p>
+      <div id="stats-body" class="tai-list"></div>
+      <button id="btn-stats-reset" class="mini-btn ghost">清除統計</button>
+      <button id="btn-stats-close" class="big-btn primary" style="margin-top:14px">關閉</button>
     </div>
   </div>
 
@@ -211,12 +226,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=58"></script>
-  <script src="tiles.js?v=58"></script>
-  <script src="sound.js?v=58"></script>
-  <script src="ai.js?v=58"></script>
-  <script src="game.js?v=58"></script>
-  <script src="network.js?v=58"></script>
-  <script src="main.js?v=58"></script>
+  <script src="mahjong.js?v=59"></script>
+  <script src="tiles.js?v=59"></script>
+  <script src="sound.js?v=59"></script>
+  <script src="ai.js?v=59"></script>
+  <script src="game.js?v=59"></script>
+  <script src="network.js?v=59"></script>
+  <script src="main.js?v=59"></script>
 </body>
 </html>

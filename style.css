@@ -164,6 +164,10 @@ input[type=text] {
   background: rgba(255,255,255,.85); color: #333; cursor: pointer;
 }
 .mini-btn.ghost { background: transparent; color: #cfe6d8; border: 1px solid rgba(255,255,255,.3); margin-top: 14px; }
+.lobby-footer-links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.lobby-footer-links .mini-btn { display: inline-block; text-decoration: none; }
+.stats-empty { color: #9ec3ac; font-size: .9rem; padding: 8px 0; }
+.stats-row { display: flex; justify-content: space-between; width: 100%; padding: 3px 0; }
 .hint-text { font-size: .8rem; color: #9ec3ac; margin-top: 14px; line-height: 1.6; }
 .credit-line { font-size: .7rem; color: rgba(158,195,172,.5); margin-top: 10px; }
 

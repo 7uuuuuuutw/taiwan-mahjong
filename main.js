@@ -88,6 +88,13 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('join-code-input').value = roomFromLink.toUpperCase().slice(0, 4);
     document.getElementById('name-input').focus();
   }
+
+  // 遊玩統計
+  document.getElementById('btn-stats').onclick = () => { renderStats(); document.getElementById('stats-modal').style.display = 'flex'; };
+  document.getElementById('btn-stats-close').onclick = () => { document.getElementById('stats-modal').style.display = 'none'; };
+  document.getElementById('btn-stats-reset').onclick = () => {
+    if (confirm('確定要清除這台裝置上的遊玩統計嗎？')) { saveStats({ hands: 0, bigHands: {}, multiShots: {} }); renderStats(); }
+  };
   document.getElementById('btn-leave').onclick = () => location.reload();
   document.getElementById('btn-leave2').onclick = () => location.reload();
 
@@ -1343,8 +1350,52 @@ function tilesRowHTML(tiles, highlightTile) {
   ).join('');
 }
 
+/* ---------- 本機遊玩統計（存在這台裝置的 localStorage，不跨裝置/玩家匯總） ----------
+ * 記錄「這台裝置看過的每一局」裡：局數、牌桌上任何人達成的大牌型（台數 >= 4 才算
+ * 大牌，避免自摸/正花/莊家這種常見小台洗版）、一炮雙響/三響次數。 */
+const STATS_KEY = 'mj_stats_v1';
+const BIG_HAND_TAI_THRESHOLD = 4;
+function loadStats() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STATS_KEY));
+    if (s && typeof s === 'object') return { hands: s.hands || 0, bigHands: s.bigHands || {}, multiShots: s.multiShots || {} };
+  } catch (e) { /* 忽略壞資料，視同沒有統計 */ }
+  return { hands: 0, bigHands: {}, multiShots: {} };
+}
+function saveStats(s) {
+  try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) { /* 私密瀏覽模式等情況寫入會失敗，忽略即可 */ }
+}
+function recordStats(payload) {
+  const s = loadStats();
+  s.hands += 1;
+  if (payload.result === 'win') {
+    for (const w of (payload.winners || [])) {
+      for (const it of (w.score.items || [])) {
+        if (it.tai >= BIG_HAND_TAI_THRESHOLD) s.bigHands[it.name] = (s.bigHands[it.name] || 0) + 1;
+      }
+    }
+    if (payload.multiShot) s.multiShots[payload.multiShot] = (s.multiShots[payload.multiShot] || 0) + 1;
+  }
+  saveStats(s);
+}
+function renderStats() {
+  const s = loadStats();
+  const body = document.getElementById('stats-body');
+  const bigHandRows = Object.entries(s.bigHands).sort((a, b) => b[1] - a[1]);
+  const multiShotRows = Object.entries(s.multiShots).sort((a, b) => b[1] - a[1]);
+  let html = `<div class="stats-row"><span>開局次數</span><b>${s.hands}</b></div>`;
+  if (bigHandRows.length || multiShotRows.length) {
+    for (const [name, count] of bigHandRows) html += `<div class="stats-row"><span>${escapeHtml(name)}</span><b>${count}</b></div>`;
+    for (const [name, count] of multiShotRows) html += `<div class="stats-row"><span>${escapeHtml(name)}</span><b>${count}</b></div>`;
+  } else {
+    html += `<p class="stats-empty">還沒有大牌紀錄，多打幾局吧！</p>`;
+  }
+  body.innerHTML = html;
+}
+
 function showHandOver(payload) {
   lastHandOver = payload;
+  recordStats(payload);
   clearActions();
   // ---- 電腦角色勝負對話 ----
   if (payload.result === 'win') {
