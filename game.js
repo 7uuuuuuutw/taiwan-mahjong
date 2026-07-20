@@ -127,9 +127,9 @@ class GameEngine {
     setTimeout(() => { if (!this.dead) this.dealAndBegin(); }, DICE_SETTLE_MS);
   }
 
-  /** 發牌動畫：先讓莊家「開門」抓第一張牌，這張抓完、畫面演出後，
-   *  才開始其他玩家（含莊家剩餘的牌）依序補牌抓滿（共 4 輪，每步 4 張），
-   *  最後補花。純演出、由電腦自動進行，玩法不變。 */
+  /** 發牌動畫：各家自莊家起輪流每次抓 4 張（共 4 輪、每家 16 張），
+   *  然後莊家「開門」多抓第 17 張，接著才自莊家起依序補花。
+   *  純演出、由電腦自動進行，玩法不變。 */
   dealAndBegin() {
     const deck = shuffle(buildDeck(), () => this.rng());
     this.wall = deck;
@@ -138,33 +138,32 @@ class GameEngine {
     this.flowerPool = new Set(); // 每局重設「七搶一」的全桌花牌進度追蹤
     this.phase = 'dealing';
 
-    // 開門：莊家先抓 1 張，讓玩家看到「開門」這個動作獨立演出一拍
-    const dealerP = this.seats[this.dealer];
-    dealerP.hand.push(this.drawFront());
-    this.emitState(`${dealerP.name} 開門`);
-    setTimeout(() => this.dealRestAfterOpening(), 700);
-  }
-
-  dealRestAfterOpening() {
-    if (this.dead) return;
-    // 開門後才開始其他家補牌：莊家先前已抓 1 張，這裡補足剩下 3 張湊滿第一輪；
-    // 其餘三家與後續 3 輪維持每步 4 張
-    const steps = [{ seat: this.dealer, count: 3 }];
-    for (let k = 1; k < 4; k++) steps.push({ seat: (this.dealer + k) % 4, count: 4 });
-    for (let r = 1; r < 4; r++) {
-      for (let k = 0; k < 4; k++) steps.push({ seat: (this.dealer + k) % 4, count: 4 });
+    // 抓牌步驟：4 輪 × 4 家，每步抓 4 張
+    const steps = [];
+    for (let r = 0; r < 4; r++) {
+      for (let k = 0; k < 4; k++) steps.push((this.dealer + k) % 4);
     }
     const dealStep = (i) => {
       if (this.dead) return;
-      if (i >= steps.length) return this.flowerPhase(0);
-      const { seat, count } = steps[i];
+      if (i >= steps.length) return this.dealerOpening();
+      const seat = steps[i];
       const p = this.seats[seat];
-      for (let j = 0; j < count; j++) p.hand.push(this.drawFront());
+      for (let j = 0; j < 4; j++) p.hand.push(this.drawFront());
       p.hand = sortTiles(p.hand);
-      this.emitState(`${p.name} 抓牌`);
+      this.emitState(`${p.name} 抓牌（第 ${Math.floor(i / 4) + 1} 輪）`);
       setTimeout(() => dealStep(i + 1), 230);
     };
     dealStep(0);
+  }
+
+  /** 開門：四家抓滿 16 張後，莊家多抓第 17 張，之後才開始依序補花 */
+  dealerOpening() {
+    if (this.dead) return;
+    const dealerP = this.seats[this.dealer];
+    dealerP.hand.push(this.drawFront());
+    dealerP.hand = sortTiles(dealerP.hand);
+    this.emitState(`${dealerP.name} 開門`);
+    setTimeout(() => this.flowerPhase(0), 700);
   }
 
   /** 補花演出：自莊家起依序補花，補到花的多停一下 */
@@ -172,11 +171,10 @@ class GameEngine {
     if (this.dead || this.phase === 'over') return; // 七搶一可能在補花途中就把本局結束了
     if (k >= 4) {
       this.turn = this.dealer;
-      this.phase = 'draw';
       this.lastDiscard = null;
       this.winner = null;
       this.emitState('開始新局');
-      this.doDrawPhase();
+      this.beginDealerAct(); // 莊家開門時已拿第 17 張，直接行動、不再摸牌
       return;
     }
     const seat = (this.dealer + k) % 4;
@@ -258,6 +256,23 @@ class GameEngine {
       baseDi: this.baseDi, baseTai: this.baseTai,
     });
     this.emitState(`${robber.name} 七搶一！`);
+  }
+
+  /** 開局莊家行動：開門時已拿了第 17 張（補花也已在 flowerPhase 處理過），
+   *  不再摸牌，直接進入打牌/自摸/暗槓的行動階段 */
+  beginDealerAct() {
+    const p = this.seats[this.dealer];
+    this.drawnTile = null; // 第17張經補花/理牌後已無從分辨，不特別標示
+    this.phase = 'act';
+    this.blockTsumoThisDraw = false;
+    const actions = this.selfActions(this.dealer, null);
+    this.tsumoAvailable = actions.tsumo;
+    if (p.isAI) {
+      this.aiSelfAct(this.dealer, null, actions);
+    } else {
+      this.armTurnTimer(this.dealer);
+      this.emit('yourTurn', { seat: this.dealer, tile: null, actions, timeLimit: this.turnLimitMs / 1000 });
+    }
   }
 
   /* -------- 摸牌階段 -------- */
