@@ -142,7 +142,7 @@ class GameEngine {
     const dealerP = this.seats[this.dealer];
     dealerP.hand.push(this.drawFront());
     this.emitState(`${dealerP.name} 開門`);
-    setTimeout(() => this.dealRestAfterOpening(), 320);
+    setTimeout(() => this.dealRestAfterOpening(), 700);
   }
 
   dealRestAfterOpening() {

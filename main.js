@@ -870,6 +870,10 @@ function renderView(view) {
     else if (/槓$/.test(msg)) Sound.kong();
     else if (totalDiscards > sndPrevDiscards) Sound.discard();
 
+    // 開門：移除頂部常駐文字提示後，這是唯一會讓玩家「看到」開門這個
+    // 動作真的先發生的地方（否則跟後續補牌動畫幾乎無法區分）
+    if (/開門$/.test(msg)) toast('🚪 ' + msg);
+
     // ---- 電腦角色情境對話 ----
     const actor = view.seats.findIndex(s => msg.startsWith(s.name + ' '));
     if (/碰$/.test(msg)) { maybeSpeak(actor, 'pong', .6); trackSkippedDraw(actor); }
