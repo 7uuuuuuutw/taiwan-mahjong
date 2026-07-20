@@ -2,6 +2,8 @@
  * main.js — UI 與流程整合
  * 大廳 / 等待室 / 牌桌渲染 / host 編排 / client 顯示
  * 依賴 mahjong.js, ai.js, game.js, network.js
+ *
+ * © 2026 7u. All Rights Reserved. 詳見專案根目錄 LICENSE。
  * ============================================================ */
 
 const net = new NetworkManager();

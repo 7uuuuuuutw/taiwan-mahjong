@@ -165,6 +165,7 @@ input[type=text] {
 }
 .mini-btn.ghost { background: transparent; color: #cfe6d8; border: 1px solid rgba(255,255,255,.3); margin-top: 14px; }
 .hint-text { font-size: .8rem; color: #9ec3ac; margin-top: 14px; line-height: 1.6; }
+.credit-line { font-size: .7rem; color: rgba(158,195,172,.5); margin-top: 10px; }
 
 /* ---------- 等待室 ---------- */
 .room-code-box {

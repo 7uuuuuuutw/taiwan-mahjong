@@ -3,6 +3,8 @@
  * 管理牌牆、回合、吃碰槓胡、結算。
  * 透過 emit(event, payload) 通知外層（UI / 網路）。
  * 依賴 mahjong.js、ai.js。
+ *
+ * © 2026 7u. All Rights Reserved. 詳見專案根目錄 LICENSE。
  * ============================================================ */
 
 const CLAIM_TIMEOUT_MS = 15000; // 人類玩家反應（吃碰槓胡）逾時自動過水

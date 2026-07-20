@@ -2,6 +2,9 @@
 
 16 張台灣麻將網頁，支援 P2P 連線對戰與電腦 AI 補位。
 
+© 2026 7u — All Rights Reserved. 本專案為 source-available（原始碼可見但非開源），
+僅供個人非商業用途瀏覽與遊玩，未經同意不得複製、散布、修改或用於其他專案。詳見 [LICENSE](LICENSE)。
+
 ## 怎麼玩
 
 麻將要用 PeerJS 連線，網頁需要透過「本機伺服器」開啟（直接雙擊 `index.html` 用 `file://` 開可能無法連線）。
