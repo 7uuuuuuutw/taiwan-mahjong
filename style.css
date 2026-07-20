@@ -846,4 +846,14 @@ input[type=text] {
   .tile { width: 28px; height: 38px; font-size: 12px; }
   .seat-bottom .seat-hand .tile { width: 32px; height: 44px; font-size: 15px; }
   .tile.discarded { width: 20px; height: 27px; font-size: 9px; }
+
+  /* 頂部資訊列窄螢幕下不換行——莊家名字（AI 名字+連莊字樣）一長就會把
+     音效/離開按鈕擠到第二行，多佔一整行高度。改成不換行、莊家名字
+     超長就截斷顯示省略號，按鈕永遠留在同一行。 */
+  .info-bar { flex-wrap: nowrap; gap: 6px; padding: 6px 10px; font-size: .75rem; }
+  .info-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #info-dealer { flex-shrink: 1; max-width: 32vw; }
+  #info-round, #info-wall { flex-shrink: 0; }
+  .info-timer { flex-shrink: 0; }
+  .info-bar .mini-btn { flex-shrink: 0; padding: 4px 8px; }
 }
