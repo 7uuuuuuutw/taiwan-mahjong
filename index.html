@@ -4,12 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>台灣麻將 · 連線對戰</title>
+  <meta name="description" content="十六張台灣麻將，開房連線立即跟朋友對戰，不滿四人自動補電腦。">
+  <!-- 分享預覽（LINE/Discord/FB 貼連結會用這些欄位產生預覽卡） -->
+  <meta property="og:title" content="台灣麻將 · 連線對戰">
+  <meta property="og:description" content="十六張台灣麻將，開房連線立即跟朋友對戰，不滿四人自動補電腦。">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <!-- favicon：用麻將牌 emoji 畫成 SVG，不用額外準備圖檔 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%80%84%3C/text%3E%3C/svg%3E">
   <!-- 思源宋體（明體）：中文標題與牌型宣告用；斷網時退回系統明體 -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=56 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=56">
+  <!-- v= 版本號：每次改版把下面所有 v=57 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=57">
 </head>
 <body>
 
@@ -47,7 +55,8 @@
       <div class="room-code-box">
         <span class="code-label">房號</span>
         <span id="room-code-display" class="code-value">----</span>
-        <button id="btn-copy" class="mini-btn">複製</button>
+        <button id="btn-copy" class="mini-btn">複製房號</button>
+        <button id="btn-copy-link" class="mini-btn">複製邀請連結</button>
       </div>
 
       <div id="player-list" class="player-list"></div>
@@ -201,12 +210,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=56"></script>
-  <script src="tiles.js?v=56"></script>
-  <script src="sound.js?v=56"></script>
-  <script src="ai.js?v=56"></script>
-  <script src="game.js?v=56"></script>
-  <script src="network.js?v=56"></script>
-  <script src="main.js?v=56"></script>
+  <script src="mahjong.js?v=57"></script>
+  <script src="tiles.js?v=57"></script>
+  <script src="sound.js?v=57"></script>
+  <script src="ai.js?v=57"></script>
+  <script src="game.js?v=57"></script>
+  <script src="network.js?v=57"></script>
+  <script src="main.js?v=57"></script>
 </body>
 </html>

@@ -73,6 +73,19 @@ window.addEventListener('DOMContentLoaded', () => {
     navigator.clipboard && navigator.clipboard.writeText(code);
     toast('已複製房號 ' + code);
   };
+  document.getElementById('btn-copy-link').onclick = () => {
+    const code = document.getElementById('room-code-display').textContent;
+    const url = location.origin + location.pathname + '?room=' + code;
+    navigator.clipboard && navigator.clipboard.writeText(url);
+    toast('已複製邀請連結');
+  };
+
+  // 從邀請連結進來（?room=XXXX）：自動帶入房號，朋友只要填暱稱、按加入
+  const roomFromLink = new URLSearchParams(location.search).get('room');
+  if (roomFromLink) {
+    document.getElementById('join-code-input').value = roomFromLink.toUpperCase().slice(0, 4);
+    document.getElementById('name-input').focus();
+  }
   document.getElementById('btn-leave').onclick = () => location.reload();
   document.getElementById('btn-leave2').onclick = () => location.reload();
 
