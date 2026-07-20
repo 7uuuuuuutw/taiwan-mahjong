@@ -444,7 +444,7 @@ function scoreHand(ctx) {
       const winPong = handMelds.find(m => m.type === 'pong' && m.tiles[0] === ctx.winTile);
       if (winPong) concealedTriplets = Math.max(0, concealedTriplets - 1);
     }
-    if (concealedTriplets === 5) add('五暗刻', 32);
+    if (concealedTriplets === 5) add('五暗刻', 8);
     else if (concealedTriplets === 4) add('四暗刻', 5);
     else if (concealedTriplets === 3) add('三暗刻', 2);
 
