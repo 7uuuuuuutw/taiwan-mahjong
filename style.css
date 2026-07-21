@@ -503,9 +503,15 @@ input[type=text] {
 .seat-left .tile-back-left, .seat-right .tile-back-right {
   width: 48px; height: 18px;
 }
-/* 疊在一起時，上家/下家的牌永遠墊在對家、自己手牌的下層 */
-.seat-top, .seat-bottom { z-index: 2; }
-.seat-left, .seat-right { z-index: 1; }
+/* 疊在一起時的圖層順序：名字標籤（seat-info）永遠最上層，不管跟誰的
+   手牌重疊都不會被擋住；接著對家/自己的手牌蓋過上下家的手牌。
+   注意：z-index 一定要下放到實際的牌/標籤元素本身，不能設在 .seat-left
+   /.seat-right 這一整層容器上——容器一旦自己有 z-index，就會替底下所有
+   子元素建立獨立的堆疊環境，把 seat-info 也一起關在裡面，永遠沒辦法
+   蓋過別的座位，設在子元素才能讓 seat-info 跨座位互相比較。 */
+.seat-info { position: relative; z-index: 3; }
+.seat-top .seat-hand, .seat-bottom .seat-hand { position: relative; z-index: 2; }
+.seat-left .seat-hand, .seat-right .seat-hand { position: relative; z-index: 1; }
 .concealed-kong .tile:first-child, .concealed-kong .tile:last-child { background: var(--tb1); }
 
 /* ---------- 棄牌池 ---------- */
