@@ -892,10 +892,6 @@ function renderView(view) {
     else if (/槓$/.test(msg)) Sound.kong();
     else if (totalDiscards > sndPrevDiscards) Sound.discard();
 
-    // 開門：移除頂部常駐文字提示後，這是唯一會讓玩家「看到」開門這個
-    // 動作真的先發生的地方（否則跟後續補牌動畫幾乎無法區分）
-    if (/開門$/.test(msg)) toast('🚪 ' + msg);
-
     // ---- 電腦角色情境對話 ----
     const actor = view.seats.findIndex(s => msg.startsWith(s.name + ' '));
     if (/碰$/.test(msg)) { maybeSpeak(actor, 'pong', .6); trackSkippedDraw(actor); }
@@ -1312,31 +1308,37 @@ function clearActions() {
   bar.style.display = 'none';
 }
 
-/* ---------- 每手倒數計時（視覺）---------- */
+/* ---------- 每手倒數計時（視覺）----------
+ * 用「絕對到期時間」而非每秒遞減的計數器：純遞減計數器在分頁切到背景時
+ * 會被瀏覽器節流（setInterval 變慢甚至暫停），回到前景時畫面就會卡在
+ * 舊數字、看起來像「計時器沒有跑」。改成每次都用 Date.now() 跟到期時間
+ * 反推剩餘秒數，不管中間 interval 被節流幾次，畫面永遠能算出正確剩餘
+ * 時間；額外監聽 visibilitychange，切回分頁的當下立刻重繪一次。 */
 let uiTimerInterval = null;
+let uiTimerDeadline = null;
+function paintUiTimer() {
+  const el = document.getElementById('info-timer');
+  if (!el || uiTimerDeadline == null) return;
+  const remain = Math.max(0, Math.ceil((uiTimerDeadline - Date.now()) / 1000));
+  el.textContent = '⏱ ' + remain;
+  el.classList.toggle('urgent', remain <= 5);
+  if (remain <= 0) stopUiTimer();
+}
 function startUiTimer(seconds) {
   stopUiTimer();
-  const el = document.getElementById('info-timer');
-  if (!el) return;
-  let remain = Math.round(seconds);
-  const paint = () => {
-    el.textContent = '⏱ ' + remain;
-    el.classList.toggle('urgent', remain <= 5);
-  };
-  paint();
-  uiTimerInterval = setInterval(() => {
-    remain--;
-    if (remain < 0) { stopUiTimer(); return; }
-    paint();
-  }, 1000);
+  uiTimerDeadline = Date.now() + Math.round(seconds) * 1000;
+  paintUiTimer();
+  uiTimerInterval = setInterval(paintUiTimer, 1000);
 }
 /** 沒有倒數時，計時器格子仍留在上方欄（顯示佔位符號），不整個消失、
  *  避免上方欄版面因為計時器出現/消失而跳動。 */
 function stopUiTimer() {
   if (uiTimerInterval) { clearInterval(uiTimerInterval); uiTimerInterval = null; }
+  uiTimerDeadline = null;
   const el = document.getElementById('info-timer');
   if (el) { el.textContent = '⏱ -'; el.classList.remove('urgent'); }
 }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) paintUiTimer(); });
 
 /* ============================================================
  * 結算畫面

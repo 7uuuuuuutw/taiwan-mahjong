@@ -398,11 +398,12 @@ class GameEngine {
     m.type = 'kong';
     m.tiles = [tile, tile, tile, tile];
     p.hand.splice(p.hand.indexOf(tile), 1);
-    this.afterKongDraw(seat, true); // 加槓為明槓：補牌不能自摸
+    this.afterKongDraw(seat, true); // 加槓：補牌仍可自摸（槓上開花）
   }
 
   /** @param isOpenKong 明槓（大明槓／加槓）為 true；暗槓為 false。
-   *  明槓補的牌不能自摸（僅暗槓可槓上開花）。 */
+   *  三種槓補的牌都可以自摸（槓上開花），isOpenKong 目前僅供未來若要
+   *  區分計分/演出時使用，不影響能否宣告胡牌。 */
   afterKongDraw(seat, isOpenKong) {
     // 每開一槓，牌尾保留區 +1（海底往前移一張）
     this.wallReserve += 1;
@@ -422,9 +423,10 @@ class GameEngine {
     this.lastDrawWasKong = true;
     this.turn = seat;
     this.phase = 'act';
-    this.blockTsumoThisDraw = !!isOpenKong;
+    // 槓上開花：不論暗槓／大明槓／加槓，補牌完成手牌都算合法自摸（標準規則），
+    // 不應該擋自己宣告胡牌
+    this.blockTsumoThisDraw = false;
     const actions = this.selfActions(seat, tile);
-    if (isOpenKong) actions.tsumo = false; // 保險：即使 selfActions 算出能胡也不讓 AI 自動宣告
     this.tsumoAvailable = actions.tsumo;
     this.emitState(`${p.name} 槓`);
     if (p.isAI) this.aiSelfAct(seat, tile, actions);
@@ -612,7 +614,7 @@ class GameEngine {
         for (let i = 0; i < 3; i++) p.hand.splice(p.hand.indexOf(tile), 1);
         p.melds.push({ type: 'kong', tiles: [tile, tile, tile, tile], concealed: false });
         this.emitState(`${p.name} 槓`);
-        return this.afterKongDraw(seat, true); // 大明槓：補牌不能自摸
+        return this.afterKongDraw(seat, true); // 大明槓：補牌仍可自摸（槓上開花）
       } else {
         for (let i = 0; i < 2; i++) p.hand.splice(p.hand.indexOf(tile), 1);
         p.melds.push({ type: 'pong', tiles: [tile, tile, tile], from });
