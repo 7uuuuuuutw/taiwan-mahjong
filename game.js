@@ -13,6 +13,7 @@ const WALL_RESERVE = 16; // 牌尾保留 16 張（8 墩）不摸，摸到剩保�
 const HU_GRACE_MS = 9000; // 有人可胡但不提示時的無聲反應窗口（自行按「胡」鈕）
 const DICE_SETTLE_MS = 1250; // 擲骰翻滾動畫定格時間，超過後才開始發牌演出
 const AI_CLAIM_DELAY_MS = [650, 950]; // 真人打出的牌被電腦吃碰槓前的可見延遲區間
+const PAUSE_POLL_MS = 500; // 斷線暫停期間，各計時型動作改用此間隔輪詢是否已恢復
 
 class GameEngine {
   /**
@@ -48,6 +49,8 @@ class GameEngine {
     this.turnTimer = null;
     this.lastDrawWasKong = false;
     this.drawnTile = null;
+    this.paused = false;    // 是否因玩家斷線而暫停
+    this.pausedSeat = null; // 暫停中斷線的座位
   }
 
   /** 銷毀：停掉所有計時器並靜音事件（回等待室時呼叫，避免舊局干擾新局） */
@@ -62,11 +65,64 @@ class GameEngine {
   armTurnTimer(seat) {
     clearTimeout(this.turnTimer);
     if (!this.turnLimitMs) return; // 不計時
-    this.turnTimer = setTimeout(() => this.autoDiscard(seat), this.turnLimitMs);
+    this.turnTimer = setTimeout(() => {
+      if (this.dead) return;
+      if (this.paused) { this.armTurnTimer(seat); return; } // 暫停中：重新倒數，等恢復
+      this.autoDiscard(seat);
+    }, this.turnLimitMs);
   }
   clearTurnTimer() {
     clearTimeout(this.turnTimer);
     this.turnTimer = null;
+  }
+
+  /** 斷線暫停：停掉所有計時器，記錄暫停者座位並通知外層彈出提示。
+   *  進行中的 AI 動作／索取回應改採輪詢（見 aiSelfAct、openClaimWindow），
+   *  暫停期間不會執行、恢復後會自動接續，不會遺失。 */
+  pauseGame(seat) {
+    if (this.phase === 'idle' || this.phase === 'over' || this.paused) return;
+    this.paused = true;
+    this.pausedSeat = seat;
+    if (this.seats[seat]) this.seats[seat].connected = false;
+    clearTimeout(this.claimTimer);
+    this.clearTurnTimer();
+    this.emit('gamePaused', { seat, name: this.seats[seat] ? this.seats[seat].name : '' });
+  }
+
+  /** 斷線者重連：解除暫停，並針對目前階段重新驅動（重送目前該行動的人
+   *  的可行動作／重啟逾時計時），讓所有人（含剛重連的人）畫面立即跟上。 */
+  resumeGame(seat) {
+    if (!this.paused) return;
+    this.paused = false;
+    this.pausedSeat = null;
+    if (this.seats[seat]) this.seats[seat].connected = true;
+    this.emit('gameResumed', { seat });
+    if (this.phase === 'act') {
+      const p = this.seats[this.turn];
+      if (!p.isAI) {
+        const actions = this.selfActions(this.turn, this.drawnTile);
+        this.armTurnTimer(this.turn);
+        this.emit('yourTurn', { seat: this.turn, tile: this.drawnTile, actions, timeLimit: this.turnLimitMs / 1000 });
+      }
+      // AI 回合的輪詢型 setTimeout 會自行偵測 paused 變 false 後接續，不需額外處理
+    } else if (this.phase === 'claim' && this.claimWindow) {
+      let anyVisibleHuman = false;
+      for (const seatStr of Object.keys(this.claimWindow.eligible)) {
+        const s = +seatStr;
+        if (this.claimWindow.responses[s] !== undefined) continue; // 已回應過的不用重送
+        const p2 = this.seats[s];
+        if (p2.isAI) continue; // AI 的輪詢型 setTimeout 會自行接續
+        const visible = { ...this.claimWindow.eligible[s] };
+        delete visible.hu;
+        if (Object.keys(visible).length > 0) {
+          anyVisibleHuman = true;
+          this.emit('claimOffer', { seat: s, tile: this.claimWindow.tile, from: this.claimWindow.from, options: visible });
+        }
+      }
+      clearTimeout(this.claimTimer);
+      this.claimTimer = setTimeout(() => this.forceResolveClaims(),
+        anyVisibleHuman ? CLAIM_TIMEOUT_MS : HU_GRACE_MS);
+    }
   }
   autoDiscard(seat) {
     if (this.phase !== 'act' || this.turn !== seat) return;
@@ -491,7 +547,12 @@ class GameEngine {
           { style: p.aiStyle }, this.aiLevel);
         const [lo, hi] = AI_CLAIM_DELAY_MS;
         const delay = lo + Math.random() * (hi - lo);
-        setTimeout(() => { if (!this.dead) this.submitClaim(seat, decision); }, delay);
+        const run = () => {
+          if (this.dead) return;
+          if (this.paused) { setTimeout(run, PAUSE_POLL_MS); return; } // 暫停中：等恢復再送出反應
+          this.submitClaim(seat, decision);
+        };
+        setTimeout(run, delay);
       } else {
         const visible = { ...eligible[seat] };
         delete visible.hu; // 隱藏胡牌提示
@@ -690,8 +751,9 @@ class GameEngine {
   aiSelfAct(seat, tile, actions) {
     const p = this.seats[seat];
     // 延遲一點模擬思考，讓 UI 有動畫感
-    setTimeout(() => {
+    const run = () => {
       if (this.dead) return;
+      if (this.paused) { setTimeout(run, PAUSE_POLL_MS); return; } // 暫停中：等恢復再接續
       if (this.phase !== 'act' || this.turn !== seat) return;
       if (actions.tsumo) return this.declareWin(seat, this.drawnTile, true);
       // 暗槓（有就槓，簡單策略）
@@ -709,7 +771,8 @@ class GameEngine {
         if (allowed) discardTile = allowed;
       }
       this.discard(seat, discardTile);
-    }, 1000); // 電腦間隔一秒出牌
+    };
+    setTimeout(run, 1000); // 電腦間隔一秒出牌
   }
 
   /* -------- 胡牌結算 -------- */
@@ -1004,8 +1067,9 @@ class GameEngine {
         seat: s.seat, name: s.name, isAI: s.isAI,
         handCount: s.hand.length, hand: s.hand,
         melds: s.melds, flowers: s.flowers, discards: s.discards, score: s.score,
-        guoShui: s.guoShui, kuikaeForbidden: s.kuikaeForbidden || [],
+        guoShui: s.guoShui, kuikaeForbidden: s.kuikaeForbidden || [], connected: s.connected,
       })),
+      paused: this.paused, pausedSeat: this.pausedSeat,
     };
   }
 

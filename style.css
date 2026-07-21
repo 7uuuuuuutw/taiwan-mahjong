@@ -675,6 +675,20 @@ input[type=text] {
 .action-pass { background: #555; }
 .action-hint { color: var(--gold); font-size: .95rem; }
 
+/* ---------- 斷線暫停遮罩 ---------- */
+.pause-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; z-index: 70;
+}
+.pause-box {
+  background: linear-gradient(180deg, #0d5c35, #073920);
+  border: 1px solid rgba(232,200,106,.55); border-top: 3px solid var(--gold);
+  border-radius: 14px; padding: 28px 34px; text-align: center; max-width: 80vw;
+}
+.pause-icon { font-size: 2.4rem; margin-bottom: 10px; animation: pausePulse 1.4s ease-in-out infinite; }
+@keyframes pausePulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+#pause-msg { color: #f2e9d0; font-size: 1.05rem; margin: 0; }
+
 /* ---------- 結算彈窗 ---------- */
 .modal {
   position: fixed; inset: 0; background: rgba(0,0,0,.7);

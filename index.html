@@ -16,8 +16,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=73 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=73">
+  <!-- v= 版本號：每次改版把下面所有 v=74 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=74">
 </head>
 <body>
 
@@ -196,6 +196,14 @@
     <div id="action-bar" class="action-bar" style="display:none"></div>
     <!-- 常駐胡牌鈕：牌未成按下 = 詐胡！ -->
     <button id="btn-hu" class="hu-btn" title="宣告胡牌（按錯會詐胡賠付！）">胡</button>
+
+    <!-- 斷線暫停遮罩：有人斷線時整桌暫停，等對方重新連回來才繼續 -->
+    <div id="pause-overlay" class="pause-overlay" style="display:none">
+      <div class="pause-box">
+        <div class="pause-icon">📡</div>
+        <p id="pause-msg">玩家斷線中，等待重新連線…</p>
+      </div>
+    </div>
   </div>
 
   <!-- ===== 結算彈窗 ===== -->
@@ -226,12 +234,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=73"></script>
-  <script src="tiles.js?v=73"></script>
-  <script src="sound.js?v=73"></script>
-  <script src="ai.js?v=73"></script>
-  <script src="game.js?v=73"></script>
-  <script src="network.js?v=73"></script>
-  <script src="main.js?v=73"></script>
+  <script src="mahjong.js?v=74"></script>
+  <script src="tiles.js?v=74"></script>
+  <script src="sound.js?v=74"></script>
+  <script src="ai.js?v=74"></script>
+  <script src="game.js?v=74"></script>
+  <script src="network.js?v=74"></script>
+  <script src="main.js?v=74"></script>
 </body>
 </html>

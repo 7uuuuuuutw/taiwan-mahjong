@@ -304,6 +304,11 @@ function wireHostHandlers() {
     // 等待對方送 join(name)
   });
   net.on('clientLeft', ({ peerId }) => {
+    // 遊戲已經開始（不在等待室）：斷線只暫停該座位，等對方重連，不移出名單
+    if (engine && engine.phase !== 'idle' && engine.phase !== 'over') {
+      const seat = seatByPeer(peerId);
+      if (seat >= 0) { engine.pauseGame(seat); return; }
+    }
     lobbyPlayers = lobbyPlayers.map(p => (p && p.peerId === peerId) ? null : p);
     renderLobby();
     broadcastLobby();
@@ -313,6 +318,18 @@ function wireHostHandlers() {
 
 function hostHandleClientMessage(peerId, msg) {
   if (msg.type === 'join') {
+    // 遊戲中斷線重連：rejoinSeat 對應目前暫停中、正等待重連的座位 →
+    // 視為重連（換上新的 peerId、恢復遊戲、補送一份最新視圖），
+    // 不當成等待室的新加入處理。
+    if (engine && msg.rejoinSeat != null && engine.seats[msg.rejoinSeat] &&
+        seatOwners[msg.rejoinSeat] && seatOwners[msg.rejoinSeat].kind === 'client' &&
+        engine.seats[msg.rejoinSeat].connected === false) {
+      const seat = msg.rejoinSeat;
+      seatOwners[seat].peerId = peerId;
+      engine.resumeGame(seat);
+      net.sendTo(peerId, { type: 'view', view: engine.viewFor(seat) });
+      return;
+    }
     // rejoinSeat：等待室房主轉移後，原本的玩家重新連進來，優先還原原本
     // 坐的位置——那個位置若還是新房主暫記的「等你重連」佔位（peerId
     // 為 null）就直接接手；若已經被真正的連線佔走（少見的競爭情況）
@@ -779,7 +796,30 @@ function hostEmit(event, payload) {
       if (o.kind === 'client') net.sendTo(o.peerId, { type: 'handOver', payload });
     });
     showHandOver(payload);
+  } else if (event === 'gamePaused') {
+    seatOwners.forEach(o => {
+      if (o.kind === 'client') net.sendTo(o.peerId, { type: 'gamePaused', payload });
+    });
+    showPauseOverlay(payload);
+  } else if (event === 'gameResumed') {
+    seatOwners.forEach(o => {
+      if (o.kind === 'client') net.sendTo(o.peerId, { type: 'gameResumed', payload });
+    });
+    hidePauseOverlay();
   }
+}
+
+/** 有人斷線：整桌暫停並顯示遮罩；resumed 時關閉。host 自己（若也在玩）
+ *  跟 client 共用這兩個函式——client 端由 clientHandleHostMessage 呼叫。 */
+function showPauseOverlay(payload) {
+  const overlay = document.getElementById('pause-overlay');
+  const msg = document.getElementById('pause-msg');
+  const name = (payload && payload.name) ? payload.name : '玩家';
+  msg.textContent = `${name} 斷線中，等待重新連線…`;
+  overlay.style.display = 'flex';
+}
+function hidePauseOverlay() {
+  document.getElementById('pause-overlay').style.display = 'none';
 }
 
 function onNextHand() {
@@ -818,6 +858,16 @@ function onJoinRoom() {
  *  不需要額外協商。 */
 function onHostLeft() {
   const activeScreen = document.querySelector('.screen.active');
+  // 遊戲進行中：無法分辨「房主真的離線」還是「自己網路剛好斷了一下」，
+  // 兩者從 client 角度看起來一樣（連線被關閉）——一律當作後者處理，
+  // 嘗試用同一個房號重新連回去；如果房主真的離線，重試會全部失敗，
+  // 最後才提示遊戲結束（也就順便涵蓋了自己斷線重連的情境）。
+  if (activeScreen && activeScreen.id === 'game-screen') {
+    toast('與房主的連線中斷，正在嘗試重新連線…');
+    const roomCode = document.getElementById('room-code-display').textContent;
+    rejoinAfterMigration(roomCode);
+    return;
+  }
   if (!activeScreen || activeScreen.id !== 'room-screen') {
     toast('房主已離線，遊戲結束');
     setTimeout(() => location.reload(), 2500);
@@ -908,6 +958,12 @@ function clientHandleHostMessage(msg) {
       break;
     case 'handOver':
       showHandOver(msg.payload);
+      break;
+    case 'gamePaused':
+      showPauseOverlay(msg.payload);
+      break;
+    case 'gameResumed':
+      hidePauseOverlay();
       break;
     case 'gameEnd':
       showFinalResult(msg.payload);
