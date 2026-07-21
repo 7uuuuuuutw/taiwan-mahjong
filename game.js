@@ -828,6 +828,8 @@ class GameEngine {
     this.falseHuHappened = true;
     this.emit('handOver', {
       result: 'falseHu', offender: seat, estTai, payments,
+      // 亮出詐胡者的牌，讓大家能確認他牌真的沒成
+      hand: p.hand.slice(), melds: p.melds, flowers: p.flowers,
       scores: this.seats.map(s => s.score),
       dealerWin: false,
       roundEnding: this.willCompleteFullRound(false),

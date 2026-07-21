@@ -1487,9 +1487,15 @@ function renderHandOverModal(payload) {
     Sound.draw_game();
     const payRows = payload.payments.map(pm =>
       `<li>賠 ${escapeHtml(seatName(pm.to))} <b>${pm.value}</b> 籌碼</li>`).join('');
+    // 亮出詐胡者的牌，讓大家能親眼確認牌真的沒成
+    const offenderMeldTiles = (payload.melds || []).flatMap(m => m.tiles);
+    const offenderReveal = payload.hand
+      ? `<div class="reveal-row">${tilesRowHTML(payload.hand)}${offenderMeldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(offenderMeldTiles)}` : ''}</div>`
+      : '';
     body.innerHTML = roundBanner + `
       <h2>💥 ${escapeHtml(seatName(payload.offender))} 詐胡！</h2>
       <p class="win-way">牌未成卻宣告胡牌，依最接近的聽牌（${payload.estTai} 台）賠付各家，並讓出莊位。</p>
+      ${offenderReveal}
       <div class="tai-list"><ul>${payRows}</ul></div>
       ${scoreTable(payload.scores)}
     `;
