@@ -197,32 +197,46 @@ function isWinningHand(hand, melds = [], opts = {}) {
  * 回傳 { pair: tile, melds: [{type:'pong'|'chi', tiles:[...]}] } 或 null
  */
 function decomposeWin(tiles) {
+  const all = decomposeWinAll(tiles);
+  return all.length ? all[0] : null;
+}
+
+/** 窮舉所有合法拆牌方式（不同對子選擇 × 不同刻子/順子取法），供台數計算
+ *  取最高台數用——單一手牌常常不止一種合法拆法（例如 111222333 同花色
+ *  可拆成三組刻子算碰碰胡，也可拆成三組順子），只取第一組找到的拆法
+ *  可能剛好選到台數較低的那組，導致台數被低估。 */
+function decomposeWinAll(tiles) {
   const counts = toCounts(tiles.filter(t => !isFlower(t)));
   const keys = Object.keys(counts);
+  const results = [];
+  const seen = new Set();
   for (const p of keys) {
     if (counts[p] >= 2) {
       counts[p] -= 2;
-      const melds = [];
-      if (extractMelds(counts, melds)) {
-        counts[p] += 2;
-        return { pair: p, melds };
-      }
+      const meldsList = [];
+      extractMeldsAll(counts, [], meldsList);
       counts[p] += 2;
+      for (const melds of meldsList) {
+        const key = p + '|' + melds.map(m => m.type + ':' + m.tiles.join('')).sort().join(',');
+        if (!seen.has(key)) { seen.add(key); results.push({ pair: p, melds }); }
+      }
     }
   }
-  return null;
+  return results;
 }
 
-function extractMelds(counts, melds) {
+/** 窮舉版 extractMelds：把每一種合法的面子取法都收進 out，而不是找到
+ *  第一組就回傳。 */
+function extractMeldsAll(counts, current, out) {
   const keys = Object.keys(counts).filter(t => counts[t] > 0);
-  if (keys.length === 0) return true;
+  if (keys.length === 0) { out.push(current.slice()); return; }
   keys.sort((a, b) => tileOrder(a) - tileOrder(b));
   const t = keys[0];
   if (counts[t] >= 3) {
     counts[t] -= 3;
-    melds.push({ type: 'pong', tiles: [t, t, t] });
-    if (extractMelds(counts, melds)) return true;
-    melds.pop();
+    current.push({ type: 'pong', tiles: [t, t, t] });
+    extractMeldsAll(counts, current, out);
+    current.pop();
     counts[t] += 3;
   }
   if (isSuited(t)) {
@@ -232,14 +246,13 @@ function extractMelds(counts, melds) {
       const t1 = suit + (n + 1), t2 = suit + (n + 2);
       if (counts[t1] > 0 && counts[t2] > 0) {
         counts[t] -= 1; counts[t1] -= 1; counts[t2] -= 1;
-        melds.push({ type: 'chi', tiles: [t, t1, t2] });
-        if (extractMelds(counts, melds)) return true;
-        melds.pop();
+        current.push({ type: 'chi', tiles: [t, t1, t2] });
+        extractMeldsAll(counts, current, out);
+        current.pop();
         counts[t] += 1; counts[t1] += 1; counts[t2] += 1;
       }
     }
   }
-  return false;
 }
 
 /* ============================================================
@@ -331,12 +344,11 @@ function findConcealedKongs(hand) {
  * }
  * 回傳 { total: 台數, items: [{name, tai}] }
  * ============================================================ */
-function scoreHand(ctx) {
+/** 針對「單一」指定拆牌方式計算台數。真正對外呼叫的是下面的 scoreHand()，
+ *  它會窮舉所有合法拆牌方式、各自呼叫這個函式，再取台數最高的那組。 */
+function scoreHandForDecomp(ctx, fullHand, decomp) {
   const items = [];
   const add = (name, tai) => { if (tai > 0) items.push({ name, tai }); };
-
-  const fullHand = ctx.hand.concat([ctx.winTile]);
-  const decomp = decomposeWin(fullHand);
   // 把亮出面子也納入完整結構分析
   const allMelds = (ctx.melds || []).map(m => ({
     type: m.type === 'kong' ? 'pong' : m.type, // 槓在型態分析上視為刻子
@@ -519,4 +531,19 @@ function scoreHand(ctx) {
 
   const total = items.reduce((a, x) => a + x.tai, 0);
   return { total, items, baXian };
+}
+
+/** 台數計算：窮舉這手牌所有合法的拆牌方式，各自計算台數，取台數最高的
+ *  那一組回傳——避免只取「找到的第一組拆法」導致複合牌型（例如可拆成
+ *  碰碰胡也可拆成順子的手牌）算出偏低的台數。 */
+function scoreHand(ctx) {
+  const fullHand = ctx.hand.concat([ctx.winTile]);
+  const decomps = decomposeWinAll(fullHand);
+  if (decomps.length === 0) return scoreHandForDecomp(ctx, fullHand, null);
+  let best = null;
+  for (const d of decomps) {
+    const result = scoreHandForDecomp(ctx, fullHand, d);
+    if (!best || result.total > best.total) best = result;
+  }
+  return best;
 }
