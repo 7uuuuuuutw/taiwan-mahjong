@@ -73,6 +73,13 @@ function decorateBackground(screenId) {
 window.addEventListener('DOMContentLoaded', () => {
   const versionEl = document.getElementById('app-version');
   if (versionEl) versionEl.textContent = 'v' + APP_VERSION;
+  // 意見回饋：mailto 連結，內文預帶版本號方便回報問題時附上
+  const feedbackEl = document.getElementById('btn-feedback');
+  if (feedbackEl) {
+    const subject = encodeURIComponent('台灣麻將 意見回饋');
+    const bodyText = encodeURIComponent(`（請描述你遇到的問題或建議）\n\n版本：v${APP_VERSION}`);
+    feedbackEl.href = `mailto:dreemurr.0703@gmail.com?subject=${subject}&body=${bodyText}`;
+  }
   document.getElementById('btn-create').onclick = onCreateRoom;
   document.getElementById('btn-join').onclick = onJoinRoom;
   document.getElementById('btn-start').onclick = onHostStart;
