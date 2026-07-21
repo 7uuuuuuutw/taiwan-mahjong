@@ -113,7 +113,7 @@ h1, h2, h3 {
   border: 1px solid rgba(232,200,106,.35);
   border-top: 3px solid var(--gold);
   border-radius: 14px;
-  padding: 32px 28px;
+  padding: 22px 28px;
   width: min(90vw, 430px);
   max-height: 92vh; overflow-y: auto;
   text-align: center;
@@ -124,20 +124,20 @@ h1, h2, h3 {
 }
 .lobby-card h1 { font-size: 2.4rem; margin-bottom: 4px; text-shadow: 0 2px 12px rgba(232,200,106,.25); }
 .subtitle {
-  color: var(--gold); margin-bottom: 22px; font-size: .9rem; letter-spacing: 3px;
+  color: var(--gold); margin-bottom: 14px; font-size: .9rem; letter-spacing: 3px;
 }
 .subtitle::after {
-  content: ''; display: block; width: 64px; height: 1px; margin: 14px auto 0;
+  content: ''; display: block; width: 64px; height: 1px; margin: 10px auto 0;
   background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
-.field { display: block; text-align: left; margin-bottom: 20px; }
+.field { display: block; text-align: left; margin-bottom: 14px; }
 .field span { display: block; font-size: .85rem; margin-bottom: 6px; color: #cfe6d8; }
 input[type=text] {
   width: 100%; padding: 12px 14px; font-size: 1.1rem;
   border-radius: 10px; border: 1px solid rgba(255,255,255,.25);
   background: rgba(255,255,255,.95); color: #111; text-align: center;
 }
-.lobby-actions { display: flex; flex-direction: column; gap: 12px; }
+.lobby-actions { display: flex; flex-direction: column; gap: 8px; }
 .or { color: #9ec3ac; font-size: .85rem; margin: 2px 0; }
 .join-row { display: flex; gap: 8px; }
 .join-row input { flex: 1; text-transform: uppercase; letter-spacing: 4px; font-weight: bold; }
@@ -163,13 +163,13 @@ input[type=text] {
   padding: 6px 12px; font-size: .8rem; border: none; border-radius: 8px;
   background: rgba(255,255,255,.85); color: #333; cursor: pointer;
 }
-.mini-btn.ghost { background: transparent; color: #cfe6d8; border: 1px solid rgba(255,255,255,.3); margin-top: 14px; }
+.mini-btn.ghost { background: transparent; color: #cfe6d8; border: 1px solid rgba(255,255,255,.3); margin-top: 10px; }
 .lobby-footer-links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .lobby-footer-links .mini-btn { display: inline-block; text-decoration: none; }
 .stats-empty { color: #9ec3ac; font-size: .9rem; padding: 8px 0; }
 .stats-row { display: flex; justify-content: space-between; width: 100%; padding: 3px 0; }
-.hint-text { font-size: .8rem; color: #9ec3ac; margin-top: 14px; line-height: 1.6; }
-.credit-line { font-size: .7rem; color: rgba(158,195,172,.5); margin-top: 10px; }
+.hint-text { font-size: .8rem; color: #9ec3ac; margin-top: 10px; line-height: 1.5; }
+.credit-line { font-size: .7rem; color: rgba(158,195,172,.5); margin-top: 6px; }
 
 /* ---------- 等待室 ---------- */
 .room-code-box {
