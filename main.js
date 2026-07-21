@@ -258,10 +258,11 @@ function checkSpecialDialogue(view) {
       specialFired.add('menqing' + seat); maybeCommentOn(seat, 'menqingWatch', .7);
     }
 
-    // 連續打出大字（字牌）：最近兩次棄牌都是字牌 → 挖苦運氣不好
-    if (!specialFired.has('honor' + seat) && discards.length >= 2) {
-      const lastTwo = discards.slice(-2);
-      if (lastTwo.every(t => t[0] === 'z')) { specialFired.add('honor' + seat); maybeCommentOn(seat, 'honorBadLuck', .8); }
+    // 連續打出大字（字牌）：最近三次棄牌都是字牌才觸發（原本只要連續兩次
+    // 太容易中，講太頻繁；改成連三次且機率降低，變成比較少見的吐槽）
+    if (!specialFired.has('honor' + seat) && discards.length >= 3) {
+      const lastThree = discards.slice(-3);
+      if (lastThree.every(t => t[0] === 'z')) { specialFired.add('honor' + seat); maybeCommentOn(seat, 'honorBadLuck', .5); }
     }
 
     // 連續兩回合打出同一張牌：推測摸進同一張，運氣很差

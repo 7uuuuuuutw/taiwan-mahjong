@@ -270,7 +270,7 @@ input[type=text] {
  * 擠到版面最下方。這裡改成 hand 與 extras 各佔一個獨立網格格，
  * extras 內部用 flex 直排 melds+flowers，靠 align-self 置中即可。 */
 .seat-left, .seat-right {
-  display: grid; width: 175px; gap: 4px 10px; flex-shrink: 0;
+  display: grid; width: clamp(90px, 24vw, 175px); gap: 4px 10px; flex-shrink: 0;
   align-content: center; justify-content: center;
 }
 .seat-left {
@@ -285,7 +285,7 @@ input[type=text] {
 .seat-left .seat-hand, .seat-right .seat-hand { grid-area: hand; }
 .seat-left .seat-extras, .seat-right .seat-extras {
   grid-area: extras; display: flex; flex-direction: column; gap: 4px;
-  align-self: center; max-width: 118px;
+  align-self: center; max-width: clamp(50px, 16vw, 118px);
 }
 .seat-left .seat-extras { align-items: flex-start; }
 .seat-right .seat-extras { align-items: flex-end; }
@@ -497,13 +497,15 @@ input[type=text] {
 .tile-back-top, .tile-back-bottom { width: 26px; height: 36px; }
 /* 用 .seat-left/.seat-right 前綴提高優先度，蓋過上面 .seat-left .tile 的通用尺寸，
    否則側家牌背會被撐成一般直立牌的高度（46px），一疊 13～16 張直接爆版面。
-   尺寸改用 vh（視窗高度）夾住，而不是固定像素：矮螢幕（手機橫向空間有限、
-   或視窗沒開很高）時，16 張牌疊起來的總高度必須跟著可用空間縮小，否則會
-   往上下溢出、擠到對家/自己的手牌區，在某些瀏覽器上還會讓整頁被迫可以
-   滑動。用 vh 讓牌背尺寸直接跟著「這台裝置實際有多少直向空間」走。 */
+   固定用正常大小，不因為視窗矮就縮小；矮螢幕下滿手牌可能會跟對家/自己
+   的手牌區重疊，但這是可接受的取捨——靠下面的 z-index 讓側家的牌墊在
+   對家與自己手牌的下層，視覺上不會互相干擾，也不需要犧牲牌的大小。 */
 .seat-left .tile-back-left, .seat-right .tile-back-right {
-  width: clamp(14px, 2.8vh, 34px); height: clamp(9px, 1.8vh, 22px);
+  width: 48px; height: 18px;
 }
+/* 疊在一起時，上家/下家的牌永遠墊在對家、自己手牌的下層 */
+.seat-top, .seat-bottom { z-index: 2; }
+.seat-left, .seat-right { z-index: 1; }
 .concealed-kong .tile:first-child, .concealed-kong .tile:last-child { background: var(--tb1); }
 
 /* ---------- 棄牌池 ---------- */
