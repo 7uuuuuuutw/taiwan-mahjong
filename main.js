@@ -73,12 +73,20 @@ function decorateBackground(screenId) {
 window.addEventListener('DOMContentLoaded', () => {
   const versionEl = document.getElementById('app-version');
   if (versionEl) versionEl.textContent = 'v' + APP_VERSION;
-  // 意見回饋：mailto 連結，內文預帶版本號方便回報問題時附上
+  // 意見回饋：mailto 連結內文預帶版本號，方便回報問題時附上。
+  // 但很多電腦沒設定預設郵件軟體，點 mailto 會完全沒反應——所以點擊時
+  // 同時把信箱複製到剪貼簿並跳提示，不管對方有沒有郵件軟體都拿得到
+  // 聯絡方式，不會讓人以為按鈕壞掉。
+  const FEEDBACK_EMAIL = 'dreemurr.0703@gmail.com';
   const feedbackEl = document.getElementById('btn-feedback');
   if (feedbackEl) {
     const subject = encodeURIComponent('台灣麻將 意見回饋');
     const bodyText = encodeURIComponent(`（請描述你遇到的問題或建議）\n\n版本：v${APP_VERSION}`);
-    feedbackEl.href = `mailto:dreemurr.0703@gmail.com?subject=${subject}&body=${bodyText}`;
+    feedbackEl.href = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${bodyText}`;
+    feedbackEl.addEventListener('click', () => {
+      navigator.clipboard && navigator.clipboard.writeText(FEEDBACK_EMAIL);
+      toast('已複製信箱 ' + FEEDBACK_EMAIL + '（若沒開啟郵件軟體可自行貼上寄信）');
+    });
   }
   document.getElementById('btn-create').onclick = onCreateRoom;
   document.getElementById('btn-join').onclick = onJoinRoom;
