@@ -6,6 +6,15 @@
  * © 2026 7u. All Rights Reserved. 詳見專案根目錄 LICENSE。
  * ============================================================ */
 
+// 版本號：直接沿用 index.html 幫這支 script 標的 ?v= 快取版本號，跟每次
+// 改版強制重載用的是同一個數字，不用另外維護——玩家在大廳看到的版本號
+// 就是「目前這台瀏覽器實際載入的是第幾版」，可以拿來確認有沒有更新到。
+// 必須在頂層同步執行時讀取 document.currentScript，搬到函式裡就會是 null。
+const APP_VERSION = (() => {
+  try { return new URL(document.currentScript.src).searchParams.get('v') || '?'; }
+  catch (e) { return '?'; }
+})();
+
 const net = new NetworkManager();
 let engine = null;          // host 才有
 let myName = '';
@@ -62,6 +71,8 @@ function decorateBackground(screenId) {
 
 /* ---------- 大廳按鈕 ---------- */
 window.addEventListener('DOMContentLoaded', () => {
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = 'v' + APP_VERSION;
   document.getElementById('btn-create').onclick = onCreateRoom;
   document.getElementById('btn-join').onclick = onJoinRoom;
   document.getElementById('btn-start').onclick = onHostStart;
