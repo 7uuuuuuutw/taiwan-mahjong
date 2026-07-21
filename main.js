@@ -15,7 +15,7 @@ const APP_VERSION = (() => {
   catch (e) { return '?'; }
 })();
 
-const net = new NetworkManager();
+let net = new NetworkManager(); // 等待室房主轉移時需要整個換掉，不能是 const
 let engine = null;          // host 才有
 let myName = '';
 let mySeat = 0;             // 我的座位（host 通常為 0）
@@ -293,7 +293,11 @@ function onCreateRoom() {
   }, (err) => {
     toast('開房失敗：' + (err.message || err.type || err));
   });
+  wireHostHandlers();
+}
 
+/** host 專用事件監聽（新開房、或等待室房主轉移後重新當房主都要掛上）。 */
+function wireHostHandlers() {
   // 有 client 連上
   net.on('clientConnected', ({ peerId }) => {
     // 等待對方送 join(name)
@@ -308,7 +312,17 @@ function onCreateRoom() {
 
 function hostHandleClientMessage(peerId, msg) {
   if (msg.type === 'join') {
-    const seat = lobbyPlayers.findIndex(p => !p);
+    // rejoinSeat：等待室房主轉移後，原本的玩家重新連進來，優先還原原本
+    // 坐的位置——那個位置若還是新房主暫記的「等你重連」佔位（peerId
+    // 為 null）就直接接手；若已經被真正的連線佔走（少見的競爭情況）
+    // 才退回找空位。
+    let seat = -1;
+    const slot = msg.rejoinSeat != null ? lobbyPlayers[msg.rejoinSeat] : undefined;
+    if (msg.rejoinSeat != null && msg.rejoinSeat >= 0 && msg.rejoinSeat <= 3 && (!slot || slot.peerId == null)) {
+      seat = msg.rejoinSeat;
+    } else {
+      seat = lobbyPlayers.findIndex(p => !p);
+    }
     if (seat < 0) {
       net.sendTo(peerId, { type: 'roomFull' });
       return;
@@ -793,7 +807,77 @@ function onJoinRoom() {
   });
 
   net.on('hostMessage', ({ msg }) => clientHandleHostMessage(msg));
-  net.on('hostLeft', () => { toast('房主已離線，遊戲結束'); setTimeout(() => location.reload(), 2500); });
+  net.on('hostLeft', onHostLeft);
+}
+
+/** 房主離線時的處理：遊戲已經開始就直接結束（沒有後端能接手隱藏資訊，
+ *  等於作弊或整局重來，範圍外）；還在等待室的話，讓座位號碼最小的
+ *  還在線玩家自動接手當新房主，其餘人重新連進同一個房號——每個 client
+ *  都用同一份最後收到的名單、同一條規則各自算，理論上會選出同一個人，
+ *  不需要額外協商。 */
+function onHostLeft() {
+  const activeScreen = document.querySelector('.screen.active');
+  if (!activeScreen || activeScreen.id !== 'room-screen') {
+    toast('房主已離線，遊戲結束');
+    setTimeout(() => location.reload(), 2500);
+    return;
+  }
+  const remaining = lobbyPlayers.filter(p => p && p.kind !== 'host');
+  if (!remaining.length) {
+    toast('房主已離線，房間已空');
+    setTimeout(() => location.reload(), 2500);
+    return;
+  }
+  const electedSeat = Math.min(...remaining.map(p => p.seat));
+  const roomCode = document.getElementById('room-code-display').textContent;
+  if (mySeat === electedSeat) {
+    toast('房主已離線，你被推舉為新房主，重新建立房間中…');
+    becomeHostAfterMigration(roomCode);
+  } else {
+    toast('房主已離線，正在嘗試重新連線…');
+    rejoinAfterMigration(roomCode);
+  }
+}
+
+function becomeHostAfterMigration(roomCode) {
+  const myOldSeat = mySeat;
+  // 保留原本名單（扣掉舊房主），其他人的連線都已失效，先暫記占位
+  // （peerId:null）等他們自己重連回來再補上真正的連線。
+  const preserved = lobbyPlayers.map((p, i) => {
+    if (!p || p.kind === 'host') return null;
+    return { seat: i, name: p.name, kind: (i === myOldSeat ? 'host' : 'client'), peerId: null };
+  });
+  net.destroy();
+  net = new NetworkManager();
+  net.host(myName, () => {
+    mySeat = myOldSeat;
+    lobbyPlayers = preserved;
+    document.getElementById('host-controls').style.display = 'block';
+    renderLobby();
+    broadcastLobby();
+  }, (err) => {
+    toast('接手房主失敗，房間結束：' + (err.message || err.type || err));
+    setTimeout(() => location.reload(), 2500);
+  }, roomCode);
+  wireHostHandlers();
+}
+
+function rejoinAfterMigration(roomCode) {
+  const myOldSeat = mySeat;
+  const tryJoin = (attemptsLeft) => {
+    net.destroy();
+    net = new NetworkManager();
+    net.join(roomCode, myName, () => {
+      document.getElementById('host-controls').style.display = 'none';
+      net.on('hostMessage', ({ msg }) => clientHandleHostMessage(msg));
+      net.on('hostLeft', onHostLeft);
+      toast('已重新連上房間');
+    }, () => {
+      if (attemptsLeft > 0) setTimeout(() => tryJoin(attemptsLeft - 1), 1500);
+      else { toast('重新連線失敗，房間已結束'); setTimeout(() => location.reload(), 2500); }
+    }, { rejoinSeat: myOldSeat });
+  };
+  tryJoin(6);
 }
 
 function clientHandleHostMessage(msg) {

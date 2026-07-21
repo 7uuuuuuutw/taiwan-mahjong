@@ -21,18 +21,21 @@ class NetworkManager {
   on(event, fn) { this.handlers[event] = fn; }
   _fire(event, payload) { if (this.handlers[event]) this.handlers[event](payload); }
 
-  /* ---------- 開房（host） ---------- */
-  host(name, onReady, onError) {
+  /* ---------- 開房（host） ----------
+   * forcedRoomCode：房主斷線後，接手的人重新聲明同一個房號用（等待室
+   * 房主轉移），不指定就正常隨機開新房號。 */
+  host(name, onReady, onError, forcedRoomCode) {
     this.isHost = true;
     this.myName = name;
-    this.roomCode = randomRoomCode();
+    this.roomCode = forcedRoomCode || randomRoomCode();
     const id = ROOM_PREFIX + this.roomCode;
     this.peer = new Peer(id, { debug: 1 });
 
     this.peer.on('open', () => onReady && onReady(this.roomCode));
     this.peer.on('error', (err) => {
-      // 房號被占用 → 換一個重試一次
-      if (err.type === 'unavailable-id') {
+      // 房號被占用 → 換一個重試一次（強制指定房號時不能換，直接回報失敗，
+      // 讓呼叫端自己決定要不要重試——通常是舊房主的 id 還沒真的釋放）
+      if (err.type === 'unavailable-id' && !forcedRoomCode) {
         this.roomCode = randomRoomCode();
         this.peer = new Peer(ROOM_PREFIX + this.roomCode, { debug: 1 });
         this.peer.on('open', () => onReady && onReady(this.roomCode));
@@ -67,8 +70,10 @@ class NetworkManager {
     for (const id in this.conns) this.sendTo(id, msg);
   }
 
-  /* ---------- 加入房間（client） ---------- */
-  join(roomCode, name, onReady, onError) {
+  /* ---------- 加入房間（client） ----------
+   * joinExtra：合併進 join 訊息的額外欄位，房主轉移後重新連線時用來
+   * 帶上「我原本坐哪一位」（rejoinSeat），讓新房主能把座位還原。 */
+  join(roomCode, name, onReady, onError, joinExtra) {
     this.isHost = false;
     this.myName = name;
     this.roomCode = roomCode.trim().toUpperCase();
@@ -79,7 +84,7 @@ class NetworkManager {
       let opened = false;
       conn.on('open', () => {
         opened = true;
-        conn.send({ type: 'join', name });
+        conn.send({ type: 'join', name, ...(joinExtra || {}) });
         onReady && onReady();
       });
       conn.on('data', (msg) => this._fire('hostMessage', { msg }));
