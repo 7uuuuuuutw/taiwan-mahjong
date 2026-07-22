@@ -288,8 +288,11 @@ function onCreateRoom() {
   const rawCode = (document.getElementById('custom-code-input').value || '').trim().toUpperCase();
   let customCode = null;
   if (rawCode) {
-    if (!/^[A-Z0-9]{4,8}$/.test(rawCode)) {
-      toast('自訂房號需為 4～8 碼英文字母或數字');
+    // 字元集跟 randomRoomCode() 一致，排除 0/1/I/O 這種容易打錯看錯的字元
+    // ——不然朋友輸入時很容易看錯一個字，連到一個根本不存在的房間 ID
+    // （PeerJS 會回報 peer-unavailable，看起來像「加入失敗」但其實是打錯字）。
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4,8}$/.test(rawCode)) {
+      toast('自訂房號需為 4～8 碼英文字母或數字，且不可用容易搞混的 0、1、I、O');
       return;
     }
     customCode = rawCode;
