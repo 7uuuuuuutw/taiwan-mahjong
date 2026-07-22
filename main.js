@@ -28,6 +28,18 @@ let pendingChi = null;      // 吃的選擇暫存
 let seatOwners = [];
 let lobbyPlayers = [];      // host 專用：等待室名單
 
+/* ---------- 斷線偵測心跳 ----------
+ * PeerJS 的連線 close 事件在真實斷線情境（WiFi 斷掉、App 被砍、換基地台）
+ * 不一定會確實觸發，不能只靠它判斷斷線——改成雙方互相定期送 ping，
+ * 超過門檻沒收到任何回應（含遊戲內其他訊息）就視同斷線。 */
+const HEARTBEAT_INTERVAL_MS = 4000;
+const HEARTBEAT_TIMEOUT_MS = 12000;
+let heartbeatInterval = null;   // host 專用：定時 ping 各 client、檢查是否逾時
+let lastSeenAt = {};            // host 專用：peerId → 最後收到訊息的時間
+let lastHostMsgAt = 0;          // client 專用：最後收到 host 訊息的時間
+let clientWatchdog = null;      // client 專用：定時檢查 host 是否已讀不回
+let reconnectInFlight = false;  // client 專用：避免重連流程被重複觸發
+
 /* ---------- 畫面切換 ---------- */
 function show(screenId) {
   for (const s of document.querySelectorAll('.screen')) s.classList.remove('active');
@@ -320,7 +332,7 @@ function onCreateRoom() {
 function wireHostHandlers() {
   // 有 client 連上
   net.on('clientConnected', ({ peerId }) => {
-    // 等待對方送 join(name)
+    lastSeenAt[peerId] = Date.now(); // 等待對方送 join(name)，先預設視為存活
   });
   net.on('clientLeft', ({ peerId }) => {
     // 遊戲已經開始（不在等待室）：斷線只暫停該座位，等對方重連，不移出名單
@@ -333,19 +345,47 @@ function wireHostHandlers() {
     broadcastLobby();
   });
   net.on('clientMessage', ({ peerId, msg }) => hostHandleClientMessage(peerId, msg));
+
+  // 心跳：定時 ping 所有 client，超過門檻沒有任何回應（含遊戲內其他訊息）
+  // 就視同斷線並暫停——PeerJS 的 close 事件在真實斷線時不一定會觸發，
+  // 不能只靠它判斷。等待室房主轉移重新掛上時要先清掉舊的計時器。
+  clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    if (!engine || engine.phase === 'idle' || engine.phase === 'over') return;
+    net.broadcast({ type: 'ping' });
+    const now = Date.now();
+    seatOwners.forEach(o => {
+      if (o.kind !== 'client') return;
+      const last = lastSeenAt[o.peerId];
+      if (last != null && now - last > HEARTBEAT_TIMEOUT_MS &&
+          engine.seats[o.seat] && engine.seats[o.seat].connected) {
+        engine.pauseGame(o.seat);
+      }
+    });
+  }, HEARTBEAT_INTERVAL_MS);
 }
 
 function hostHandleClientMessage(peerId, msg) {
+  lastSeenAt[peerId] = Date.now(); // 任何訊息（含 pong）都算存活證明
+  // 保險：心跳誤判暫停（例如筆電睡眠喚醒後短暫沒回應）但連線其實沒斷、
+  // 同一條連線後來又送出訊息了，直接視為恢復，不用逼對方走一次完整重連。
+  if (engine && engine.paused && seatByPeer(peerId) === engine.pausedSeat) {
+    engine.resumeGame(engine.pausedSeat);
+  }
   if (msg.type === 'join') {
-    // 遊戲中斷線重連：rejoinSeat 對應目前暫停中、正等待重連的座位 →
-    // 視為重連（換上新的 peerId、恢復遊戲、補送一份最新視圖），
-    // 不當成等待室的新加入處理。
+    // 遊戲中斷線重連：rejoinSeat 對應目前這場牌局裡、原本屬於某個 client
+    // 的座位 → 視為重連（換上新的 peerId、視需要恢復遊戲、補送一份最新
+    // 視圖），不當成等待室的新加入處理。
+    // 註：這裡刻意不要求「該座位當下一定要被標記成已斷線」——host 的
+    // 斷線偵測（心跳／PeerJS close 事件）不一定會即時觸發，只要是自己
+    // 過去這個座位、且重連訊息帶著 rejoinSeat（只有我方重連流程才會帶），
+    // 就直接接受，避免偵測沒跟上導致重連永遠被當成新加入而失敗。
     if (engine && msg.rejoinSeat != null && engine.seats[msg.rejoinSeat] &&
-        seatOwners[msg.rejoinSeat] && seatOwners[msg.rejoinSeat].kind === 'client' &&
-        engine.seats[msg.rejoinSeat].connected === false) {
+        seatOwners[msg.rejoinSeat] && seatOwners[msg.rejoinSeat].kind === 'client') {
       const seat = msg.rejoinSeat;
       seatOwners[seat].peerId = peerId;
-      engine.resumeGame(seat);
+      if (engine.paused && engine.pausedSeat === seat) engine.resumeGame(seat);
+      else engine.seats[seat].connected = true;
       net.sendTo(peerId, { type: 'view', view: engine.viewFor(seat) });
       return;
     }
@@ -862,6 +902,7 @@ function onJoinRoom() {
     document.getElementById('room-code-display').textContent = code.toUpperCase();
     show('room-screen');
     toast('已連上房間，等待房主開始…');
+    startClientWatchdog();
   }, (err) => {
     toast('加入失敗：' + (err.message || err.type || err));
   });
@@ -870,18 +911,40 @@ function onJoinRoom() {
   net.on('hostLeft', onHostLeft);
 }
 
+/** 定時檢查是否太久沒收到 host 的任何訊息（含 ping）——跟 host 端的心跳
+ *  對稱，同樣是因為 PeerJS 的 close 事件不一定會在真實斷線時觸發，不能
+ *  只靠它偵測。只在牌局畫面時檢查，且用 reconnectInFlight 避免跟
+ *  onHostLeft（實際 close 事件）重複觸發重連。 */
+function startClientWatchdog() {
+  if (clientWatchdog) return;
+  lastHostMsgAt = Date.now();
+  clientWatchdog = setInterval(() => {
+    if (reconnectInFlight) return;
+    const activeScreen = document.querySelector('.screen.active');
+    if (!activeScreen || activeScreen.id !== 'game-screen') return;
+    if (Date.now() - lastHostMsgAt > HEARTBEAT_TIMEOUT_MS) {
+      reconnectInFlight = true;
+      toast('與房主的連線疑似中斷，正在嘗試重新連線…');
+      const roomCode = document.getElementById('room-code-display').textContent;
+      rejoinAfterMigration(roomCode);
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
 /** 房主離線時的處理：遊戲已經開始就直接結束（沒有後端能接手隱藏資訊，
  *  等於作弊或整局重來，範圍外）；還在等待室的話，讓座位號碼最小的
  *  還在線玩家自動接手當新房主，其餘人重新連進同一個房號——每個 client
  *  都用同一份最後收到的名單、同一條規則各自算，理論上會選出同一個人，
  *  不需要額外協商。 */
 function onHostLeft() {
+  if (reconnectInFlight) return; // watchdog 可能已經先觸發重連，避免重複
   const activeScreen = document.querySelector('.screen.active');
   // 遊戲進行中：無法分辨「房主真的離線」還是「自己網路剛好斷了一下」，
   // 兩者從 client 角度看起來一樣（連線被關閉）——一律當作後者處理，
   // 嘗試用同一個房號重新連回去；如果房主真的離線，重試會全部失敗，
   // 最後才提示遊戲結束（也就順便涵蓋了自己斷線重連的情境）。
   if (activeScreen && activeScreen.id === 'game-screen') {
+    reconnectInFlight = true;
     toast('與房主的連線中斷，正在嘗試重新連線…');
     const roomCode = document.getElementById('room-code-display').textContent;
     rejoinAfterMigration(roomCode);
@@ -904,6 +967,7 @@ function onHostLeft() {
     toast('房主已離線，你被推舉為新房主，重新建立房間中…');
     becomeHostAfterMigration(roomCode);
   } else {
+    reconnectInFlight = true;
     toast('房主已離線，正在嘗試重新連線…');
     rejoinAfterMigration(roomCode);
   }
@@ -941,17 +1005,28 @@ function rejoinAfterMigration(roomCode) {
       document.getElementById('host-controls').style.display = 'none';
       net.on('hostMessage', ({ msg }) => clientHandleHostMessage(msg));
       net.on('hostLeft', onHostLeft);
+      lastHostMsgAt = Date.now();
+      reconnectInFlight = false;
+      startClientWatchdog();
       toast('已重新連上房間');
     }, () => {
       if (attemptsLeft > 0) setTimeout(() => tryJoin(attemptsLeft - 1), 1500);
-      else { toast('重新連線失敗，房間已結束'); setTimeout(() => location.reload(), 2500); }
+      else {
+        reconnectInFlight = false;
+        toast('重新連線失敗，房間已結束');
+        setTimeout(() => location.reload(), 2500);
+      }
     }, { rejoinSeat: myOldSeat });
   };
   tryJoin(6);
 }
 
 function clientHandleHostMessage(msg) {
+  lastHostMsgAt = Date.now(); // 任何 host 訊息（含 ping）都算存活證明
   switch (msg.type) {
+    case 'ping':
+      net.sendToHost({ type: 'pong' });
+      break;
     case 'lobby': {
       lobbyPlayers = [null, null, null, null];
       msg.players.forEach(p => { lobbyPlayers[p.seat] = { seat: p.seat, name: p.name, kind: p.isHost ? 'host' : 'client' }; });
