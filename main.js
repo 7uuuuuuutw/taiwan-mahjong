@@ -283,6 +283,17 @@ function checkSpecialDialogue(view) {
  * ============================================================ */
 function onCreateRoom() {
   myName = (document.getElementById('name-input').value || '玩家').trim().slice(0, 8);
+  // 自訂房號（選填）：留空就沿用原本的隨機 4 碼；有填就直接拿它當 PeerJS
+  // 房間 ID，讓朋友能用好記的房號加入。
+  const rawCode = (document.getElementById('custom-code-input').value || '').trim().toUpperCase();
+  let customCode = null;
+  if (rawCode) {
+    if (!/^[A-Z0-9]{4,8}$/.test(rawCode)) {
+      toast('自訂房號需為 4～8 碼英文字母或數字');
+      return;
+    }
+    customCode = rawCode;
+  }
   net.host(myName, (roomCode) => {
     mySeat = 0;
     // 固定 4 格：null = 空位（開局補電腦）。玩家可用 ↑↓ 換到任何位置（含對家）
@@ -292,8 +303,13 @@ function onCreateRoom() {
     show('room-screen');
     renderLobby();
   }, (err) => {
-    toast('開房失敗：' + (err.message || err.type || err));
-  });
+    // 自訂房號被占用時要讓玩家換一個試試，不能像隨機房號那樣自動偷換掉
+    if (customCode && err && err.type === 'unavailable-id') {
+      toast('這個房號已經有人在用，換一個試試');
+    } else {
+      toast('開房失敗：' + (err.message || err.type || err));
+    }
+  }, customCode);
   wireHostHandlers();
 }
 
