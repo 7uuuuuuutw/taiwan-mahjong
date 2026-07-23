@@ -837,6 +837,9 @@ const BACK_COLORS = {
   red: ['#b04a3f', '#8a2f27', '#63201a'],
   purple: ['#7a4fb0', '#5a3786', '#3f2663'],
   night: ['#4a4a55', '#33333c', '#222228'],
+  gold: ['#e8c86a', '#c9a227', '#8a6b12'],
+  pink: ['#f28fb0', '#d95c8a', '#a83c66'],
+  tiffany: ['#5fcfc7', '#0abab5', '#087f7c'],
 };
 function applyTileBack(key) {
   const c = BACK_COLORS[key] || BACK_COLORS.green;
