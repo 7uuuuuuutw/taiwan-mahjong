@@ -411,8 +411,15 @@ function scoreHandForDecomp(ctx, fullHand, decomp) {
    *  （七搶一是另一種獨立的搶花特殊胡牌，不看牌型、固定 8 台、由抓到
    *  那張花的人單獨賠付，直接在 game.js 的 robFlowerWin() 結算，
    *  不經過這個函式。） --- */
-  const baXian = new Set(flowers.map(f => parseInt(f.slice(1), 10))).size === 8;
+  const flowerNums = new Set(flowers.map(f => parseInt(f.slice(1), 10)));
+  const baXian = flowerNums.size === 8;
   if (baXian) add('八仙過海', 8);
+
+  /* --- 集四季／集四君子：湊齊春夏秋冬（1~4）或梅蘭竹菊（5~8）其中一組
+   *  就額外 +1 台，跟正花與八仙過海各自獨立、可疊加（正花只認對應自己
+   *  門風的那一張，這裡看的是「有沒有湊滿一整組」，不管門風）。 --- */
+  if ([1, 2, 3, 4].every(n => flowerNums.has(n))) add('集四季', 1);
+  if ([5, 6, 7, 8].every(n => flowerNums.has(n))) add('集四君子', 1);
 
   /* --- 牌型台數（需成功拆牌） --- */
   if (decomp) {
