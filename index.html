@@ -16,8 +16,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=83 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=83">
+  <!-- v= 版本號：每次改版把下面所有 v=84 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=84">
 </head>
 <body>
 
@@ -49,10 +49,33 @@
         不滿 4 人時空位由電腦補上。
       </p>
       <div class="lobby-footer-links">
+        <button id="btn-rules" class="mini-btn ghost">📜 特殊規則</button>
         <button id="btn-stats" class="mini-btn ghost">📊 遊玩統計</button>
         <a id="btn-feedback" class="mini-btn ghost" href="#">💬 意見回饋</a>
       </div>
       <p class="credit-line">© 2026 7u · <span id="app-version">v?</span></p>
+    </div>
+  </div>
+
+  <!-- ===== 特殊規則速查（只列跟一般麻將不同/容易忘記的地方，基本規則不重複） ===== -->
+  <div id="rules-modal" class="modal" style="display:none">
+    <div class="modal-card rules-card">
+      <h2>📜 特殊規則速查</h2>
+      <ul class="rules-list">
+        <li>大明槓／加槓補的牌不能自摸，只有暗槓補牌能槓上開花</li>
+        <li>禁止槓上家（上家剛打出的牌不能明槓）</li>
+        <li>喰い替え：吃/碰後那輪不能打出讓這口變白吃白碰的牌</li>
+        <li>過水後要再打一張牌，胡牌資格（含自摸）才恢復</li>
+        <li>暗槓只能在自己摸牌那輪宣告</li>
+        <li>平胡需無花且聽雙頭，中洞/邊張/單吊不算平胡</li>
+        <li>一炮雙響算最接近放槍者那家；三家同胡才算一炮三響</li>
+        <li>哩咕（七對＋一刻）8台；五暗刻8台</li>
+        <li>牌尾保留16張、每開一槓+1；連莊 n 次多加 2n 台</li>
+        <li>骰子全紅+1台、骰歸+2台；豹子可選籌碼×3或台數×3</li>
+        <li>八仙過海（集滿8花）8台三家均付；七搶一也是8台</li>
+        <li>詐胡依自己最接近的聽牌台數賠付各家，並讓出莊位</li>
+      </ul>
+      <button id="btn-rules-close" class="big-btn primary">關閉</button>
     </div>
   </div>
 
@@ -237,12 +260,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=83"></script>
-  <script src="tiles.js?v=83"></script>
-  <script src="sound.js?v=83"></script>
-  <script src="ai.js?v=83"></script>
-  <script src="game.js?v=83"></script>
-  <script src="network.js?v=83"></script>
-  <script src="main.js?v=83"></script>
+  <script src="mahjong.js?v=84"></script>
+  <script src="tiles.js?v=84"></script>
+  <script src="sound.js?v=84"></script>
+  <script src="ai.js?v=84"></script>
+  <script src="game.js?v=84"></script>
+  <script src="network.js?v=84"></script>
+  <script src="main.js?v=84"></script>
 </body>
 </html>

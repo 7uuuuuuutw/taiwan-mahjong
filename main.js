@@ -157,6 +157,10 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('name-input').focus();
   }
 
+  // 特殊規則速查
+  document.getElementById('btn-rules').onclick = () => { document.getElementById('rules-modal').style.display = 'flex'; };
+  document.getElementById('btn-rules-close').onclick = () => { document.getElementById('rules-modal').style.display = 'none'; };
+
   // 遊玩統計
   document.getElementById('btn-stats').onclick = () => { renderStats(); document.getElementById('stats-modal').style.display = 'flex'; };
   document.getElementById('btn-stats-close').onclick = () => { document.getElementById('stats-modal').style.display = 'none'; };
