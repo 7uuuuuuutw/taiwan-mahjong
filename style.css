@@ -281,17 +281,7 @@ input[type=text] {
   grid-template-areas: "info info" "extras hand";
   grid-template-columns: auto auto;
 }
-/* 上下家名字標籤容易因為名字較長而超出手牌欄位寬度，兩側看起來歪一邊
-   ——限制最大寬度、名字太長就用刪節號截斷，維持左右對稱整齊。 */
-.seat-left .seat-info, .seat-right .seat-info {
-  grid-area: info; justify-self: center;
-  width: clamp(96px, 30vw, 128px); box-sizing: border-box;
-  padding-left: 8px; padding-right: 8px; gap: 4px;
-}
-.seat-left .seat-name, .seat-right .seat-name {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1;
-}
-.seat-left .seat-score, .seat-right .seat-score { flex-shrink: 0; }
+.seat-left .seat-info, .seat-right .seat-info { grid-area: info; justify-self: center; }
 .seat-left .seat-hand, .seat-right .seat-hand { grid-area: hand; }
 .seat-left .seat-extras, .seat-right .seat-extras {
   grid-area: extras; display: flex; flex-direction: column; gap: 4px;
