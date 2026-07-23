@@ -213,14 +213,25 @@ function charOf(seatName) {
 function showSpeech(seatIdx, text) {
   if (!lastView) return;
   const rel = (seatIdx - lastView.you + 4) % 4;
-  const seatEl = document.getElementById('seat-' + SEAT_LABELS[rel]);
+  const pos = SEAT_LABELS[rel];
+  const seatEl = document.getElementById('seat-' + pos);
   if (!seatEl) return;
   const old = seatEl.querySelector('.speech-bubble');
   if (old) old.remove();
   const b = document.createElement('div');
-  b.className = 'speech-bubble bubble-' + SEAT_LABELS[rel];
+  b.className = 'speech-bubble bubble-' + pos;
   b.textContent = text;
   seatEl.appendChild(b);
+  // 上/下家（左右兩側）：.seat-left/.seat-right 的內容是整塊垂直置中
+  // （align-content:center），螢幕越高（例如平板），名字標籤離容器頂端
+  // 就越遠——CSS 寫死的 top 值只在手機那種內容剛好貼齊容器頂端的情況
+  // 才準，螢幕變高就會讓泡泡冒在名字上方一大截、對不齊。改成量測名字
+  // 標籤（.seat-info）在容器內的實際位置，泡泡才能在各種螢幕高度下都
+  // 穩定貼著它。
+  if (pos === 'left' || pos === 'right') {
+    const infoEl = seatEl.querySelector('.seat-info');
+    if (infoEl) b.style.top = (infoEl.offsetTop + infoEl.offsetHeight + 8) + 'px';
+  }
   setTimeout(() => { if (b.parentNode) b.remove(); }, 3400);
 }
 
