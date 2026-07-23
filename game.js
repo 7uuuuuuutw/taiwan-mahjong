@@ -411,7 +411,7 @@ class GameEngine {
     const p = this.seats[seat];
     const idx = p.hand.indexOf(tile);
     if (idx < 0) return;
-    // 喰い替え限制：剛吃/碰完，這張是不能打的
+    // 吃碰限制：剛吃/碰完，這張是不能打的
     if (p.kuikaeForbidden && p.kuikaeForbidden.includes(tile)) {
       this.emitState(`${p.name} 剛吃／碰，這張不能打`);
       return;
@@ -699,7 +699,7 @@ class GameEngine {
         this.turn = seat;
         this.phase = 'act';
         this.drawnTile = null;
-        // 碰完不能立刻打出剛碰的那張牌（喰い替え限制）
+        // 碰完不能立刻打出剛碰的那張牌（吃碰限制）
         p.kuikaeForbidden = [tile];
         this.emitState(`${p.name} 碰`);
         // 暗槓只能在「自己摸牌那輪」宣告；碰完立刻要打牌，不提供暗槓選項
@@ -723,7 +723,7 @@ class GameEngine {
       this.turn = seat;
       this.phase = 'act';
       this.drawnTile = null;
-      // 吃完不能立刻打出會讓這口吃變得「白吃」的牌（喰い替え限制）
+      // 吃完不能立刻打出會讓這口吃變得「白吃」的牌（吃碰限制）
       p.kuikaeForbidden = this.computeKuikaeForbidden(tile, use);
       this.emitState(`${p.name} 吃`);
       // 暗槓只能在「自己摸牌那輪」宣告；吃完立刻要打牌，不提供暗槓選項
@@ -737,7 +737,7 @@ class GameEngine {
     this.nextTurn(from);
   }
 
-  /** 吃完後不可立即打出的牌（喰い替え限制）：
+  /** 吃完後不可立即打出的牌（吃碰限制）：
    *  永遠禁止打出剛被吃走的那張牌；若是「邊張」吃（用最小/最大兩張湊成吃），
    *  也禁止打出會讓這口吃等同「白吃」的另一端延伸牌。
    *  例：手牌 2345，吃別人的 2（用 3,4 組成 234）→ 禁打 2、5。 */
@@ -960,7 +960,7 @@ class GameEngine {
     // 自己回合（摸牌後）
     if (this.phase === 'act' && this.turn === seat) {
       if (isWinningHand(p.hand, p.melds, this.winOpts)) {
-        // 明槓（大明槓／加槓）補的牌不能自摸，僅暗槓可以
+        // 大明槓（吃別人棄牌湊成的槓）補的牌不能自摸；暗槓與加槓都可以
         if (this.blockTsumoThisDraw) { this.emitState(`${p.name} 明槓補牌，此張不能自摸`); return; }
         // 過水中不提示、不攔下——刻意讓玩家自己記得，仍宣告就當詐胡處理
         if (p.guoShui) return this.falseHu(seat);

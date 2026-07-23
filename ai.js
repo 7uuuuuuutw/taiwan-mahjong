@@ -35,7 +35,7 @@ function styleParams(style) {
  * @param {object[]} melds 已亮面子
  * @param {string} level 強度：easy(常亂打) / normal(偶有失誤) / hard(全力＋防守)
  * @param {object} ctx 可選：{ seatDiscards: string[][], style, kuikaeForbidden } 各家棄牌、
- *   本家偏好打法、剛吃/碰完這輪不能打的牌（喰い替え限制）
+ *   本家偏好打法、剛吃/碰完這輪不能打的牌（吃碰限制）
  * @returns {string} 要打出的牌
  */
 function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {

@@ -1478,7 +1478,7 @@ function makeBackTile(pos, index = 0) {
 let hasDiscardedOnce = false; // 出牌提示只在本次連線的第一次打牌時出現
 function onClickHandTile(tile) {
   if (!currentActions || !currentActions.discard) return;
-  // 剛吃／碰完不能打出的牌（喰い替え限制）
+  // 剛吃／碰完不能打出的牌（吃碰限制）
   if (lastView) {
     const forbidden = (lastView.seats[mySeat] && lastView.seats[mySeat].kuikaeForbidden) || [];
     if (forbidden.includes(tile)) { toast('剛吃／碰，這張不能打'); return; }
