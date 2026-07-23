@@ -40,6 +40,36 @@ let lastHostMsgAt = 0;          // client 專用：最後收到 host 訊息的�
 let clientWatchdog = null;      // client 專用：定時檢查 host 是否已讀不回
 let reconnectInFlight = false;  // client 專用：避免重連流程被重複觸發
 
+/* ---------- 重新整理後自動回到房間（client 專用） ----------
+ * 只存最基本的「房號＋座位＋名字」到 localStorage，重新整理（等於整個
+ * JS 狀態重來）後如果還在有效期限內，就自動用同一個房號＋座位敲房主
+ * 重連——host 端既有的重連判斷（見 hostHandleClientMessage 的 join
+ * 分支）本來就接受這種請求，不需要另外改 host 邏輯。
+ * 只對 client 有意義：host 重新整理等於整個 GameEngine（唯一的權威狀態）
+ * 都沒了，重連也救不回來，所以不存。 */
+const SESSION_KEY = 'mj_session_v1';
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 分鐘沒更新就視為過期，避免很久之後開新房間還被拉回舊房間
+function saveSession() {
+  try {
+    const roomCode = document.getElementById('room-code-display').textContent;
+    if (!roomCode || roomCode === '----') return;
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, seat: mySeat, name: myName, ts: Date.now() }));
+  } catch (e) {}
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !s.roomCode || s.seat == null || !s.name) return null;
+    if (Date.now() - s.ts > SESSION_TTL_MS) { clearSession(); return null; }
+    return s;
+  } catch (e) { return null; }
+}
+
 /* ---------- 畫面切換 ---------- */
 function show(screenId) {
   for (const s of document.querySelectorAll('.screen')) s.classList.remove('active');
@@ -133,8 +163,8 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-stats-reset').onclick = () => {
     if (confirm('確定要清除這台裝置上的遊玩統計嗎？')) { saveStats({ hands: 0, bigHands: {}, multiShots: {} }); renderStats(); }
   };
-  document.getElementById('btn-leave').onclick = () => location.reload();
-  document.getElementById('btn-leave2').onclick = () => location.reload();
+  document.getElementById('btn-leave').onclick = () => { clearSession(); location.reload(); };
+  document.getElementById('btn-leave2').onclick = () => { clearSession(); location.reload(); };
 
   // 音效開關
   document.getElementById('btn-sound').onclick = (e) => {
@@ -149,7 +179,25 @@ window.addEventListener('DOMContentLoaded', () => {
   // 大廳與等待室的麻將氛圍動態背景
   decorateBackground('lobby-screen');
   decorateBackground('room-screen');
+
+  attemptSessionResume();
 });
+
+/** 開頁時如果偵測到 30 分鐘內還有效的「上次房間」記錄，直接自動重連
+ *  回去（不用使用者再輸入房號/暱稱一次）——對應斷線後把分頁整個重新
+ *  整理的情境，跟一般斷線重連共用同一套 host 端接受邏輯與 client 端的
+ *  rejoinAfterMigration 重試流程。 */
+function attemptSessionResume() {
+  const s = loadSession();
+  if (!s) return;
+  myName = s.name;
+  mySeat = s.seat;
+  document.getElementById('room-code-display').textContent = s.roomCode;
+  document.getElementById('host-controls').style.display = 'none';
+  show('game-screen');
+  toast('偵測到你先前在房間 ' + s.roomCode + '，正在自動重新連線…');
+  rejoinAfterMigration(s.roomCode);
+}
 
 // 音效用：追蹤狀態變化以觸發對應聲音
 let sndPrevDiscards = 0;
@@ -919,6 +967,7 @@ function startClientWatchdog() {
     if (reconnectInFlight) return;
     const activeScreen = document.querySelector('.screen.active');
     if (!activeScreen || activeScreen.id !== 'game-screen') return;
+    saveSession(); // 持續刷新「上次在哪個房間/座位」的時間戳，牌局中重新整理才接得回去
     if (Date.now() - lastHostMsgAt > HEARTBEAT_TIMEOUT_MS) {
       reconnectInFlight = true;
       toast('與房主的連線疑似中斷，正在嘗試重新連線…');
@@ -1005,11 +1054,13 @@ function rejoinAfterMigration(roomCode) {
       lastHostMsgAt = Date.now();
       reconnectInFlight = false;
       startClientWatchdog();
+      saveSession();
       toast('已重新連上房間');
     }, () => {
       if (attemptsLeft > 0) setTimeout(() => tryJoin(attemptsLeft - 1), 1500);
       else {
         reconnectInFlight = false;
+        clearSession(); // 房間真的回不去了，別再讓下次重新整理又白試一次
         toast('重新連線失敗，房間已結束');
         setTimeout(() => location.reload(), 2500);
       }
@@ -1037,6 +1088,7 @@ function clientHandleHostMessage(msg) {
       mySeat = msg.yourSeat;
       if (msg.tileBack) applyTileBack(msg.tileBack);
       show('game-screen');
+      saveSession();
       break;
     case 'view':
       renderView(msg.view);
@@ -1057,12 +1109,14 @@ function clientHandleHostMessage(msg) {
       hidePauseOverlay();
       break;
     case 'gameEnd':
+      clearSession(); // 遊戲結束，不用再自動重連回去
       showFinalResult(msg.payload);
       break;
     case 'rollDiceRequest':
       showRollButton();
       break;
     case 'backToLobby':
+      clearSession(); // 回到等待室，不算牌局中，不用再自動重連
       document.getElementById('result-modal').style.display = 'none';
       clearActions();
       show('room-screen');
