@@ -714,15 +714,15 @@ input[type=text] {
 .tai-total .mult { color: #ff8a80; font-size: 1.1rem; }
 .chip-line { font-size: .85rem; color: #cfe6d8; margin-left: 8px; }
 
-/* ---------- 特殊規則速查（只列跟一般麻將不同的地方，要求不能出現捲軸，
-   所以用雙欄排版把清單「橫向攤開」，不是單欄往下無限延伸） ---------- */
-.rules-card { width: min(94vw, 640px); padding: 12px 16px; max-height: 94vh; }
-.rules-card h2 { margin-bottom: 6px; font-size: 1rem; text-align: center; }
-.rules-card .big-btn { padding: 8px 16px; }
-.rules-list { list-style: none; margin: 0 0 10px; padding: 0; columns: 2; column-gap: 16px; }
+/* ---------- 特殊規則速查（只列跟一般麻將不同的地方）。桌機空間充裕，
+   預設用正常字級；窄螢幕（見下方 @media）才需要縮小、收緊間距來避免
+   出現捲軸，兩者不能共用同一套尺寸。 ---------- */
+.rules-card { width: min(90vw, 640px); padding: 22px 28px; max-height: 90vh; }
+.rules-card h2 { margin-bottom: 12px; font-size: 1.3rem; text-align: center; }
+.rules-list { list-style: none; margin: 0 0 16px; padding: 0; columns: 2; column-gap: 26px; }
 .rules-list li {
-  font-size: .66rem; line-height: 1.22; color: #cfe6d8;
-  padding: 3px 0 3px 12px; position: relative;
+  font-size: .9rem; line-height: 1.45; color: #cfe6d8;
+  padding: 7px 0 7px 17px; position: relative;
   break-inside: avoid; -webkit-column-break-inside: avoid;
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
@@ -905,4 +905,12 @@ input[type=text] {
   #info-round, #info-wall { flex-shrink: 0; }
   .info-timer { flex-shrink: 0; }
   .info-bar .mini-btn { flex-shrink: 0; padding: 4px 8px; }
+
+  /* 特殊規則速查：桌機版預設字級在窄螢幕會超出視窗需要捲動，這裡收緊
+     字級與間距（要求不能出現捲軸）。 */
+  .rules-card { padding: 12px 16px; }
+  .rules-card h2 { margin-bottom: 6px; font-size: 1rem; }
+  .rules-card .big-btn { padding: 8px 16px; }
+  .rules-list { margin: 0 0 10px; column-gap: 16px; }
+  .rules-list li { font-size: .66rem; line-height: 1.22; padding: 3px 0 3px 12px; }
 }
