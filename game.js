@@ -27,6 +27,8 @@ class GameEngine {
       hand: [], melds: [], flowers: [], discards: [], score: opts.scores ? opts.scores[i] : 0,
       connected: true,
       guoShui: false, // 過水：棄胡後，打出一張牌前不得再胡
+      guoShuiTile: null, // 過水當下放棄的那張胡牌（結算詐胡時要亮出來）
+      guoShuiFrom: null, // 該牌是自摸（=自己座位）還是誰打出的
     }));
     this.emit = emit;
     this.roundWind = opts.roundWind || 0;   // 0東
@@ -162,7 +164,10 @@ class GameEngine {
   startHand() {
     clearTimeout(this.claimTimer);
     this.clearTurnTimer();
-    for (const p of this.seats) { p.hand = []; p.melds = []; p.flowers = []; p.discards = []; p.guoShui = false; }
+    for (const p of this.seats) {
+      p.hand = []; p.melds = []; p.flowers = []; p.discards = [];
+      p.guoShui = false; p.guoShuiTile = null; p.guoShuiFrom = null;
+    }
     this.dice = null; this.diceBonus = null;
     this.lastDiscard = null;
     this.winner = null;
@@ -415,8 +420,15 @@ class GameEngine {
     //  - 這次打牌若是「放棄自摸」→ 進入過水（打出一張牌前不得再胡）
     //  - 否則，打出一張牌即解除過水
     const decliningTsumo = (this.turn === seat && this.tsumoAvailable);
-    if (decliningTsumo) p.guoShui = true;
-    else if (p.guoShui) p.guoShui = false;
+    if (decliningTsumo) {
+      p.guoShui = true;
+      p.guoShuiTile = this.drawnTile; // 放棄自摸的那張（自己摸到的牌）
+      p.guoShuiFrom = seat;
+    } else if (p.guoShui) {
+      p.guoShui = false;
+      p.guoShuiTile = null;
+      p.guoShuiFrom = null;
+    }
     this.tsumoAvailable = false;
     p.kuikaeForbidden = null;
 
@@ -631,6 +643,8 @@ class GameEngine {
       const s = +seatStr;
       if (eligible[s].hu && (!responses[s] || responses[s].action !== 'hu')) {
         this.seats[s].guoShui = true;
+        this.seats[s].guoShuiTile = tile; // 放棄的那張（別家打出的牌）
+        this.seats[s].guoShuiFrom = from;
       }
     }
 
@@ -889,8 +903,11 @@ class GameEngine {
     }
     this.winner = null;
     this.falseHuHappened = true;
+    // 若是過水中仍宣告胡（牌其實已經成了，只是被過水擋下）而非真的沒成牌，
+    // 把當初放棄的那張牌／來源一併附上，讓大家能核對這次詐胡是怎麼回事。
+    const guoShuiInfo = p.guoShui ? { tile: p.guoShuiTile, from: p.guoShuiFrom } : null;
     this.emit('handOver', {
-      result: 'falseHu', offender: seat, estTai, payments,
+      result: 'falseHu', offender: seat, estTai, payments, guoShui: guoShuiInfo,
       // 亮出詐胡者的牌，讓大家能確認他牌真的沒成
       hand: p.hand.slice(), melds: p.melds, flowers: p.flowers,
       scores: this.seats.map(s => s.score),
@@ -945,7 +962,8 @@ class GameEngine {
       if (isWinningHand(p.hand, p.melds, this.winOpts)) {
         // 明槓（大明槓／加槓）補的牌不能自摸，僅暗槓可以
         if (this.blockTsumoThisDraw) { this.emitState(`${p.name} 明槓補牌，此張不能自摸`); return; }
-        if (p.guoShui) { this.emitState(`${p.name} 過水中，不能自摸`); return; }
+        // 過水中不提示、不攔下——刻意讓玩家自己記得，仍宣告就當詐胡處理
+        if (p.guoShui) return this.falseHu(seat);
         this.clearTurnTimer();
         return this.declareWin(seat, this.drawnTile || p.hand[p.hand.length - 1], true);
       }
@@ -955,11 +973,8 @@ class GameEngine {
     if (this.phase === 'claim' && this.claimWindow) {
       const ent = this.claimWindow.eligible[seat];
       if (ent && ent.hu) return this.submitClaim(seat, { action: 'hu' });
-      const t = this.claimWindow.tile;
-      if (isWinningHand(p.hand.concat([t]), p.melds, this.winOpts)) {
-        this.emitState(`${p.name} 過水中，不能胡`);
-        return;
-      }
+      // ent.hu 在過水中本來就不會被標記（見 openClaimWindow），跟真的沒
+      // 成牌一樣直接視為詐胡，不額外提示「過水中不能胡」
       return this.falseHu(seat);
     }
     // 其他時機（不是你的回合、也沒有正在等你決定的牌）：

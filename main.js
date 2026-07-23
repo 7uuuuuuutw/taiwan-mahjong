@@ -1252,8 +1252,8 @@ function renderSeat(s, pos, seat, view) {
   const nameEl = area.querySelector('.seat-name');
   const windCh = (view.eastSeat != null)
     ? '【' + ['東', '南', '西', '北'][(seat - view.eastSeat + 4) % 4] + '】' : '';
-  const guoShuiBadge = (s.guoShui && pos === 'bottom') ? ' 💧過水' : '';
-  nameEl.textContent = windCh + (isDealer ? '莊 ' : '') + s.name + guoShuiBadge;
+  // 過水狀態刻意不提示玩家自己（見設計說明），名字標籤不再顯示過水徽章
+  nameEl.textContent = windCh + (isDealer ? '莊 ' : '') + s.name;
   const scoreEl = area.querySelector('.seat-score');
   scoreEl.textContent = (s.score >= 0 ? '+' : '') + s.score;
 
@@ -1808,9 +1808,17 @@ function renderHandOverModal(payload) {
     const offenderReveal = payload.hand
       ? `<div class="reveal-row">${tilesRowHTML(payload.hand)}${offenderMeldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(offenderMeldTiles)}` : ''}</div>`
       : '';
+    // 過水中仍宣告胡：牌其實已經成了，只是被過水擋下——跟真的沒成牌的
+    // 詐胡文案不同，並亮出當初放棄的那張牌／來源讓大家核對這次判定。
+    const gs = payload.guoShui;
+    const desc = gs
+      ? `過水中仍宣告胡牌，依規定算詐胡：${escapeHtml(seatName(payload.offender))} 這輪已經放棄過${gs.from === payload.offender ? '自己摸到的' : ('　' + escapeHtml(seatName(gs.from)) + ' 打出的')}這張牌，打出一張牌前不得再胡。`
+      : '牌未成卻宣告胡牌。';
+    const guoShuiReveal = (gs && gs.tile) ? `<div class="reveal-row">${tilesRowHTML([gs.tile], gs.tile)}</div>` : '';
     body.innerHTML = roundBanner + `
       <h2>💥 ${escapeHtml(seatName(payload.offender))} 詐胡！</h2>
-      <p class="win-way">牌未成卻宣告胡牌，依最接近的聽牌（${payload.estTai} 台）賠付各家，並讓出莊位。</p>
+      <p class="win-way">${desc}依最接近的聽牌（${payload.estTai} 台）賠付各家，並讓出莊位。</p>
+      ${guoShuiReveal}
       ${offenderReveal}
       <div class="tai-list"><ul>${payRows}</ul></div>
       ${scoreTable(payload.scores)}
