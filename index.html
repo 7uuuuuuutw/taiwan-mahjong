@@ -16,8 +16,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=90 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=90">
+  <!-- v= 版本號：每次改版把下面所有 v=92 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=92">
 </head>
 <body>
 
@@ -61,46 +61,21 @@
   <div id="rules-modal" class="modal" style="display:none">
     <div class="modal-card rules-card">
       <h2>📜 特殊規則速查</h2>
-      <div class="rules-cols">
-        <div class="rules-cat">
-          <h3>槓與自摸</h3>
-          <ul class="rules-list">
-            <li>大明槓（吃別人棄牌湊成的槓）補的牌不能自摸；暗槓與加槓補牌都能槓上開花</li>
-            <li>禁止槓上家（上家剛打出的牌不能明槓）</li>
-            <li>暗槓只能在自己摸牌那輪宣告</li>
-          </ul>
-        </div>
-        <div class="rules-cat">
-          <h3>吃碰限制</h3>
-          <ul class="rules-list">
-            <li>剛吃/碰完那輪，不能打出讓這口吃/碰變白吃白碰的牌</li>
-          </ul>
-        </div>
-        <div class="rules-cat">
-          <h3>胡牌與過水</h3>
-          <ul class="rules-list">
-            <li>過水中仍宣告胡牌一律視同詐胡，遊戲不會事先提示過水狀態</li>
-            <li>平胡需無花且聽雙頭，中洞/邊張/單吊不算平胡</li>
-            <li>一炮雙響算最接近放槍者那家；三家同胡才算一炮三響</li>
-            <li>詐胡依自己最接近的聽牌台數賠付各家，並讓出莊位</li>
-          </ul>
-        </div>
-        <div class="rules-cat">
-          <h3>特殊台數與加成</h3>
-          <ul class="rules-list">
-            <li>哩咕（七對＋一刻）8台；五暗刻8台</li>
-            <li>骰子全紅+1台、骰歸+2台；豹子可選籌碼×3或台數×3</li>
-            <li>八仙過海（集滿8花）8台三家均付；七搶一也是8台</li>
-            <li>集滿春夏秋冬或梅蘭竹菊其中一組各+1台，可與正花/八仙過海疊加</li>
-          </ul>
-        </div>
-        <div class="rules-cat">
-          <h3>牌局規則</h3>
-          <ul class="rules-list">
-            <li>牌尾保留16張、每開一槓+1；連莊 n 次多加 2n 台</li>
-          </ul>
-        </div>
-      </div>
+      <ul class="rules-list">
+        <li>大明槓（吃別人棄牌湊成的槓）補的牌不能自摸；暗槓與加槓補牌都能槓上開花</li>
+        <li>禁止槓上家（上家剛打出的牌不能明槓）</li>
+        <li>暗槓只能在自己摸牌那輪宣告</li>
+        <li>剛吃/碰完那輪，不能打出讓這口吃/碰變白吃白碰的牌</li>
+        <li>過水中仍宣告胡牌一律視同詐胡，遊戲不會事先提示過水狀態</li>
+        <li>平胡需無花且聽雙頭，中洞/邊張/單吊不算平胡</li>
+        <li>一炮雙響算最接近放槍者那家；三家同胡才算一炮三響</li>
+        <li>詐胡依自己最接近的聽牌台數賠付各家，並讓出莊位</li>
+        <li>哩咕（七對＋一刻）8台；五暗刻8台</li>
+        <li>骰子全紅+1台、骰歸+2台；豹子可選籌碼×3或台數×3</li>
+        <li>八仙過海（集滿8花）8台三家均付；七搶一也是8台</li>
+        <li>集滿春夏秋冬或梅蘭竹菊其中一組各+1台，可與正花/八仙過海疊加</li>
+        <li>牌尾保留16張、每開一槓+1；連莊 n 次多加 2n 台</li>
+      </ul>
       <button id="btn-rules-close" class="big-btn primary">關閉</button>
     </div>
   </div>
@@ -286,12 +261,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=90"></script>
-  <script src="tiles.js?v=90"></script>
-  <script src="sound.js?v=90"></script>
-  <script src="ai.js?v=90"></script>
-  <script src="game.js?v=90"></script>
-  <script src="network.js?v=90"></script>
-  <script src="main.js?v=90"></script>
+  <script src="mahjong.js?v=92"></script>
+  <script src="tiles.js?v=92"></script>
+  <script src="sound.js?v=92"></script>
+  <script src="ai.js?v=92"></script>
+  <script src="game.js?v=92"></script>
+  <script src="network.js?v=92"></script>
+  <script src="main.js?v=92"></script>
 </body>
 </html>
