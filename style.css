@@ -281,7 +281,17 @@ input[type=text] {
   grid-template-areas: "info info" "extras hand";
   grid-template-columns: auto auto;
 }
-.seat-left .seat-info, .seat-right .seat-info { grid-area: info; justify-self: center; }
+/* 上下家名字標籤容易因為名字較長而超出手牌欄位寬度，兩側看起來歪一邊
+   ——限制最大寬度、名字太長就用刪節號截斷，維持左右對稱整齊。 */
+.seat-left .seat-info, .seat-right .seat-info {
+  grid-area: info; justify-self: center;
+  width: clamp(96px, 30vw, 128px); box-sizing: border-box;
+  padding-left: 8px; padding-right: 8px; gap: 4px;
+}
+.seat-left .seat-name, .seat-right .seat-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1;
+}
+.seat-left .seat-score, .seat-right .seat-score { flex-shrink: 0; }
 .seat-left .seat-hand, .seat-right .seat-hand { grid-area: hand; }
 .seat-left .seat-extras, .seat-right .seat-extras {
   grid-area: extras; display: flex; flex-direction: column; gap: 4px;
@@ -875,6 +885,12 @@ input[type=text] {
   .tile { width: 28px; height: 38px; font-size: 12px; }
   .seat-bottom .seat-hand .tile { width: 32px; height: 44px; font-size: 15px; }
   .tile.discarded { width: 20px; height: 27px; font-size: 9px; }
+  /* 上下家棄牌區（discard-left/right）欄位很窄，20px 的棄牌一欄就快占滿，
+     只能疊成一直行；縮小這兩區專用的棄牌尺寸，讓它至少能排成兩欄。 */
+  .discard-left .tile.discarded, .discard-right .tile.discarded {
+    width: 16px; height: 22px; font-size: 7px;
+  }
+  .discard-left, .discard-right { gap: 1px; }
 
   /* 頂部資訊列窄螢幕下不換行——莊家名字（AI 名字+連莊字樣）一長就會把
      音效/離開按鈕擠到第二行，多佔一整行高度。改成不換行、莊家名字
