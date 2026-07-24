@@ -938,4 +938,14 @@ input[type=text] {
   .rules-card .big-btn { padding: 8px 16px; }
   .rules-list { margin: 0 0 10px; column-gap: 16px; }
   .rules-list li { font-size: .66rem; line-height: 1.22; padding: 3px 0 3px 12px; }
+
+  /* 手機版縮小中央骰盅的圈，讓上下家（左右兩側）的手牌可以稍微放大一點
+     ——骰盅跟側家手牌雖然是不同區塊，但骰盅在窄螢幕上視覺份量偏重，
+     縮小後畫面感覺更寬鬆，也才有理由把側家手牌加大。骰盅內的骰子字級
+     跟著等比例縮小，避免縮小圈之後骰子數字反而顯得太擠、快超出圈外。 */
+  #dice-glass { width: 90px; height: 90px; }
+  .glass-dice .die { font-size: 1.4rem; }
+  .glass-shine { width: 27px; height: 14px; top: 10px; left: 16px; }
+  .glass-bonus { font-size: .58rem; }
+  .seat-left .tile-back-left, .seat-right .tile-back-right { width: 54px; height: 20px; }
 }
