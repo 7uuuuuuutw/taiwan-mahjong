@@ -556,7 +556,12 @@ class GameEngine {
         const decision = aiReactToDiscard(p.hand, p.melds, tile,
           { hu: eligible[seat].hu, pong: eligible[seat].pong, kong: eligible[seat].kong,
             chi: eligible[seat].chi, chiOptions: eligible[seat].chiOptions },
-          { style: p.aiStyle }, this.aiLevel);
+          {
+            style: p.aiStyle,
+            seatDiscards: this.seats.map(s => s.discards),
+            // 同上：自己的面子已經由 cleanHand/melds 直接算過，這裡只補別人的
+            allMelds: this.seats.map((s, i) => i === seat ? [] : s.melds.filter(m => !(m.type === 'kong' && m.concealed))),
+          }, this.aiLevel);
         const [lo, hi] = AI_CLAIM_DELAY_MS;
         const delay = lo + Math.random() * (hi - lo);
         const run = () => {
@@ -777,7 +782,15 @@ class GameEngine {
       if (actions.addKongs && actions.addKongs.length) {
         return this.doAddKong(seat, actions.addKongs[0]);
       }
-      const ctx = { seatDiscards: this.seats.map(s => s.discards), style: p.aiStyle, kuikaeForbidden: p.kuikaeForbidden || [] };
+      const ctx = {
+        seatDiscards: this.seats.map(s => s.discards),
+        // 自己的面子已經透過 aiChooseDiscard 的 melds 參數算過一次，這裡
+        // 只補「別人的」面子，不然自己面子的牌會被算兩次，導致
+        // visibleCounts 誤判成「看到的比實際多」，剩餘張數反而低估。
+        // 別家暗槓看不到牌面，也不算進「已知看得到」的統計。
+        allMelds: this.seats.map((s, i) => i === seat ? [] : s.melds.filter(m => !(m.type === 'kong' && m.concealed))),
+        style: p.aiStyle, kuikaeForbidden: p.kuikaeForbidden || [],
+      };
       let discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel, ctx);
       // 安全網：萬一還是選到剛吃/碰不能打的牌，改打手上第一張允許的牌，避免卡住不出牌
       if (p.kuikaeForbidden && p.kuikaeForbidden.includes(discardTile)) {

@@ -56,6 +56,10 @@ function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {
   const levelMult = level === 'hard' ? 1 : (level === 'normal' ? 0.5 : 0.25);
   const safeTiles = (ctx && ctx.seatDiscards) ? safeTileSet(ctx.seatDiscards) : null;
   const majoritySuit = dominantSuit(tiles);
+  // 剩餘張數統計，只在還沒打出候選牌前算一次（打哪張候選都不影響「看得
+  // 到多少」，那些牌本來就已知，只是換個地方放）——hard 等級才用，
+  // easy/normal 維持原本單純數種類的權重，難度落差更明顯。
+  const visCounts = level === 'hard' ? visibleCounts(tiles, melds, ctx) : null;
 
   let bestTile = tiles[0];
   let bestScore = -Infinity;
@@ -63,8 +67,10 @@ function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {
   for (const t of uniq) {
     const rest = removeOne(tiles, t);
     let score = handScore(rest, melds);
-    // 進張數：打這張之後，牌型能被多少「種」牌改善（越多越靈活）
-    score += ukeireCount(rest, melds) * sp.ukeireWeight * levelMult;
+    // 進張「期望值」：不是單純數能改善牌型的牌有幾種，是把每種有效牌
+    // 實際還剩幾張（根據公開資訊統計）加總、除以 4 正規化——同樣能讓
+    // 向聽數進步，剩 4 張沒人碰過的牌跟只剩 0 張的牌，期望值天差地遠。
+    score += ukeireCount(rest, melds, visCounts) * sp.ukeireWeight * levelMult;
     // 防守：別家棄過的牌視為安全牌
     if (safeTiles && safeTiles.has(t)) score += sp.safeWeight * levelMult;
     // 追一色：打出非優勢花色的牌加分
@@ -81,6 +87,27 @@ function safeTileSet(seatDiscards) {
   const set = new Set();
   for (const pile of seatDiscards) for (const t of pile) set.add(t);
   return set;
+}
+
+/** 統計每一種牌「已知看得到」的張數：自己的手牌／面子、全桌棄牌、全桌
+ *  已亮面子（別家暗槓看不到牌面，不計入）。花色字牌每種固定 4 張，
+ *  這是後面估算「還剩幾張活著」的統計依據——公開資訊，不偷看別人暗牌。 */
+function visibleCounts(hand, melds, ctx) {
+  const counts = {};
+  const add = (t) => { if (t && !isFlower(t)) counts[t] = (counts[t] || 0) + 1; };
+  hand.forEach(add);
+  (melds || []).forEach(m => m.tiles.forEach(add));
+  if (ctx) {
+    if (ctx.allMelds) ctx.allMelds.forEach(ms => (ms || []).forEach(m => m.tiles.forEach(add)));
+    if (ctx.seatDiscards) ctx.seatDiscards.forEach(pile => (pile || []).forEach(add));
+  }
+  return counts;
+}
+
+/** 某張牌目前還剩幾張「活著」（可能摸到、不在任何人已知的牌堆裡）：
+ *  4 減掉看得到的張數，最少 0。 */
+function liveCount(tile, visCounts) {
+  return Math.max(0, 4 - (visCounts[tile] || 0));
 }
 
 /** 手牌中數量最多的花色（m/p/s），供「追一色」風格判斷優勢花色 */
@@ -157,14 +184,21 @@ function bestDecomposition(tiles, meldsNeeded) {
   return best;
 }
 
-/** 進張數：摸到哪些「種」牌能讓向聽數再降低（僅計種類數，不計剩餘張數，維持輕量） */
-function ukeireCount(tiles, melds) {
+/** 進張數：摸到哪些「種」牌能讓向聽數再降低。
+ *  有給 visCounts（各牌已知看得到的張數）時改成統計加權：每種有效牌
+ *  依「還剩幾張活著」（liveCount，最多 4）算分再除以 4 正規化，反映
+ *  真實機率——同樣能讓向聽數進步，剩 4 張沒人碰過的牌權重是 1，只剩
+ *  1 張快被摸光的牌權重只有 0.25，不再一視同仁。沒給 visCounts（例如
+ *  easy/normal 難度）就退回原本單純數種類，維持原本的難度落差。 */
+function ukeireCount(tiles, melds, visCounts) {
   const base = estimateShanten(tiles, melds);
   if (base < 0) return 0;
   let count = 0;
   for (const t of allTileTypes()) {
     if (tiles.filter(x => x === t).length >= 4) continue; // 四張都在手上不可能再摸到
-    if (estimateShanten(tiles.concat([t]), melds) < base) count++;
+    if (estimateShanten(tiles.concat([t]), melds) < base) {
+      count += visCounts ? liveCount(t, visCounts) / 4 : 1;
+    }
   }
   return count;
 }
@@ -241,8 +275,10 @@ function aiReactToDiscard(hand, melds, tile, canActions, ctx, level = 'normal') 
   const sp = styleParams(ctx && ctx.style);
 
   if (level === 'hard') {
-    // hard：碰／槓／吃依偏好打法的向聽容忍度判斷，吃則從所有選項中挑向聽最佳的
+    // hard：碰／槓／吃依偏好打法的向聽容忍度判斷，吃則從所有選項中挑
+    // 「進張期望值」最高的（用公開資訊統計剩餘張數加權，不是單純數種類）
     const beforeShanten = estimateShanten(cleanHand, melds);
+    const visCounts = visibleCounts(cleanHand, melds, ctx);
 
     if (canActions.kong) {
       // 明槓一律用手上其他 3 張（不改變花色張數，向聽不會變差），直接開
@@ -260,7 +296,7 @@ function aiReactToDiscard(hand, melds, tile, canActions, ctx, level = 'normal') 
         const after = removeN(removeOne(cleanHand, combo[0]), combo[1], 1);
         const newMelds = melds.concat([{ type: 'chi', tiles: [combo[0], tile, combo[1]] }]);
         const sh = estimateShanten(after, newMelds);
-        const uk = sh <= beforeShanten ? ukeireCount(after, newMelds) : -1;
+        const uk = sh <= beforeShanten ? ukeireCount(after, newMelds, visCounts) : -1;
         if (sh < bestShanten || (sh === bestShanten && uk > bestUkeire)) {
           bestShanten = sh; bestUkeire = uk; bestCombo = combo;
         }
