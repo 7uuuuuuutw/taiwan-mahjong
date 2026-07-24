@@ -15,39 +15,74 @@
       <stop offset="55%" stop-color="#f9f5ea"/>
       <stop offset="100%" stop-color="#f0ebda"/>
     </linearGradient>
+    <filter id="tileShadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#000" flood-opacity=".45"/>
+    </filter>
     <g id="floatTile">
+      <rect x="2" y="3" width="54" height="72" rx="7" fill="#d8d2bd"/>
       <rect x="0" y="0" width="54" height="72" rx="7" fill="url(#tileFace)" stroke="#cbc5ae" stroke-width="1.5"/>
     </g>
   </defs>
 
   <rect width="1200" height="630" fill="url(#bg)"/>
 
-  <!-- 飄浮麻將牌背景裝飾（呼應大廳頁的漂浮牌動畫，這裡取靜態的某一幀） -->
-  <g opacity=".16">
-    <use href="#floatTile" x="140" y="60" transform="rotate(-12 167 96)"/>
-    <use href="#floatTile" x="480" y="30" transform="rotate(8 507 66)"/>
-    <use href="#floatTile" x="640" y="470" transform="rotate(-6 667 506)"/>
-    <use href="#floatTile" x="60" y="430" transform="rotate(10 87 466)"/>
-    <use href="#floatTile" x="1080" y="470" transform="rotate(-14 1107 506)"/>
-    <use href="#floatTile" x="30" y="230" transform="rotate(6 57 266)"/>
-    <use href="#floatTile" x="760" y="60" transform="rotate(-9 787 96)"/>
+  <!-- 飄浮麻將牌背景裝飾（呼應大廳頁的漂浮牌動畫，這裡取靜態的某一幀），
+       每張牌面都帶一點內容（花色/數字），不是空白牌背 -->
+  <g opacity=".2">
+    <g transform="translate(140,60) rotate(-12)">
+      <use href="#floatTile"/>
+      <circle cx="18" cy="24" r="6" fill="#1f5fa8"/><circle cx="36" cy="24" r="6" fill="#1f5fa8"/>
+      <circle cx="18" cy="46" r="6" fill="#1f5fa8"/><circle cx="36" cy="46" r="6" fill="#1f5fa8"/>
+    </g>
+    <g transform="translate(480,30) rotate(8)">
+      <use href="#floatTile"/>
+      <text x="27" y="46" font-family="'Noto Serif TC',serif" font-size="30" font-weight="900" fill="#c0392b" text-anchor="middle">中</text>
+    </g>
+    <g transform="translate(640,470) rotate(-6)">
+      <use href="#floatTile"/>
+      <circle cx="27" cy="20" r="6" fill="#1e7a45"/><circle cx="27" cy="36" r="6" fill="#c0392b"/><circle cx="27" cy="52" r="6" fill="#1f5fa8"/>
+    </g>
+    <g transform="translate(60,430) rotate(10)">
+      <use href="#floatTile"/>
+      <text x="27" y="30" font-family="Georgia,serif" font-size="16" font-weight="900" fill="#1f5fa8" text-anchor="middle">五</text>
+      <text x="27" y="58" font-family="'Noto Serif TC',serif" font-size="22" font-weight="900" fill="#1f5fa8" text-anchor="middle">萬</text>
+    </g>
+    <g transform="translate(1080,470) rotate(-14)">
+      <use href="#floatTile"/>
+      <text x="27" y="46" font-family="'Noto Serif TC',serif" font-size="30" font-weight="900" fill="#1e7a45" text-anchor="middle">發</text>
+    </g>
+    <g transform="translate(30,230) rotate(6)">
+      <use href="#floatTile"/>
+      <circle cx="18" cy="20" r="5" fill="#c0392b"/><circle cx="36" cy="20" r="5" fill="#c0392b"/>
+      <circle cx="18" cy="36" r="5" fill="#c0392b"/><circle cx="36" cy="36" r="5" fill="#c0392b"/>
+      <circle cx="18" cy="52" r="5" fill="#c0392b"/><circle cx="36" cy="52" r="5" fill="#c0392b"/>
+    </g>
+    <g transform="translate(760,60) rotate(-9)">
+      <use href="#floatTile"/>
+      <text x="27" y="30" font-family="Georgia,serif" font-size="16" font-weight="900" fill="#1e7a45" text-anchor="middle">九</text>
+      <text x="27" y="58" font-family="'Noto Serif TC',serif" font-size="22" font-weight="900" fill="#1e7a45" text-anchor="middle">索</text>
+    </g>
   </g>
 
   <!-- 雙線裱框，呼應遊戲介面的邊框設計 -->
   <rect x="28" y="28" width="1144" height="574" rx="18" fill="none" stroke="rgba(232,200,106,.28)" stroke-width="2"/>
 
-  <!-- 三張斜置麻將牌裝飾（右側） -->
-  <g transform="translate(870,190) rotate(-8)">
+  <!-- 三張立體斜置麻將牌裝飾（右側）：每張都有底層厚度色塊＋投影，
+       呈現立體感，不是純平面色塊 -->
+  <g transform="translate(870,190) rotate(-8)" filter="url(#tileShadow)">
+    <rect x="5" y="7" width="128" height="172" rx="12" fill="#d8d2bd"/>
     <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
-    <text x="64" y="107" font-family="'Noto Serif TC', Georgia, serif" font-size="60" font-weight="900" fill="#1e7a45" text-anchor="middle" dominant-baseline="alphabetic">發</text>
+    <text x="64" y="107" font-family="'Noto Serif TC', Georgia, serif" font-size="60" font-weight="900" fill="#1e7a45" text-anchor="middle">發</text>
   </g>
-  <g transform="translate(960,215) rotate(6)">
+  <g transform="translate(960,215) rotate(6)" filter="url(#tileShadow)">
+    <rect x="5" y="7" width="128" height="172" rx="12" fill="#d8d2bd"/>
     <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
     <text x="64" y="106" font-family="'Noto Serif TC', Georgia, serif" font-size="58" font-weight="900" fill="#c0392b" text-anchor="middle">中</text>
   </g>
-  <g transform="translate(915,290) rotate(-2)">
+  <g transform="translate(915,290) rotate(-2)" filter="url(#tileShadow)">
+    <rect x="5" y="7" width="128" height="172" rx="12" fill="#d8d2bd"/>
     <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
-    <text x="64" y="72" font-family="Georgia, serif" font-size="38" font-weight="900" fill="#1f5fa8" text-anchor="middle">8</text>
+    <text x="64" y="72" font-family="'Noto Serif TC', serif" font-size="34" font-weight="900" fill="#1f5fa8" text-anchor="middle">八</text>
     <text x="64" y="130" font-family="'Noto Serif TC', serif" font-size="50" font-weight="900" fill="#1f5fa8" text-anchor="middle">萬</text>
   </g>
 
