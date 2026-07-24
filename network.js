@@ -7,6 +7,23 @@
 
 const ROOM_PREFIX = 'twmj16-'; // 避免與其他 PeerJS 使用者的房號撞號
 
+/* PeerJS 預設只給 STUN（用來探測雙方的公開 IP/連接埠），沒有 TURN
+ * 中繼伺服器。多數情況 STUN 就夠兩邊直接打通，但只要任一邊在對稱式
+ * NAT（symmetric NAT，常見於部分電信商的行動網路、公司/校園網路、
+ * CGNAT）後面，直接連線就是連不通、只能卡到逾時——這是「連線逾時」
+ * 回報的真正常見成因，不一定是房號打錯。這裡加一個免費公用 TURN
+ * 伺服器（OpenRelay，社群常用的免費方案）當最後備援：能直連還是優先
+ * 直連，只有直連真的不通時才會繞經這台中繼伺服器轉發加密過的連線
+ * 資料。 */
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  ],
+};
+
 class NetworkManager {
   constructor() {
     this.peer = null;
@@ -29,7 +46,7 @@ class NetworkManager {
     this.myName = name;
     this.roomCode = forcedRoomCode || randomRoomCode();
     const id = ROOM_PREFIX + this.roomCode;
-    this.peer = new Peer(id, { debug: 1 });
+    this.peer = new Peer(id, { debug: 1, config: ICE_SERVERS });
 
     this.peer.on('open', () => onReady && onReady(this.roomCode));
     this.peer.on('error', (err) => {
@@ -37,7 +54,7 @@ class NetworkManager {
       // 讓呼叫端自己決定要不要重試——通常是舊房主的 id 還沒真的釋放）
       if (err.type === 'unavailable-id' && !forcedRoomCode) {
         this.roomCode = randomRoomCode();
-        this.peer = new Peer(ROOM_PREFIX + this.roomCode, { debug: 1 });
+        this.peer = new Peer(ROOM_PREFIX + this.roomCode, { debug: 1, config: ICE_SERVERS });
         this.peer.on('open', () => onReady && onReady(this.roomCode));
         this.peer.on('connection', (c) => this._onHostConnection(c));
         this.peer.on('error', (e2) => onError && onError(e2));
@@ -77,7 +94,7 @@ class NetworkManager {
     this.isHost = false;
     this.myName = name;
     this.roomCode = roomCode.trim().toUpperCase();
-    this.peer = new Peer({ debug: 1 });
+    this.peer = new Peer({ debug: 1, config: ICE_SERVERS });
     this.peer.on('open', () => {
       const conn = this.peer.connect(ROOM_PREFIX + this.roomCode, { reliable: true });
       this.hostConn = conn;
@@ -90,8 +107,10 @@ class NetworkManager {
       conn.on('data', (msg) => this._fire('hostMessage', { msg }));
       conn.on('close', () => this._fire('hostLeft', {}));
       conn.on('error', (e) => onError && onError(e));
-      // 連線逾時
-      setTimeout(() => { if (!opened) onError && onError(new Error('連線逾時，請確認房號')); }, 12000);
+      // 連線逾時：常見成因是房號打錯，但也可能是雙方網路環境（NAT）
+      // 導致直連失敗，即使有 TURN 備援也可能要多等一下才連得上，訊息
+      // 兩種可能都提示，不要只怪房號。
+      setTimeout(() => { if (!opened) onError && onError(new Error('連線逾時——請確認房號是否正確；若房號沒錯，可能是雙方網路環境限制了直接連線，可以換個網路（例如都用同一個 Wi-Fi）再試一次')); }, 16000);
     });
     this.peer.on('error', (err) => onError && onError(err));
   }
