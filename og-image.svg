@@ -15,9 +15,23 @@
       <stop offset="55%" stop-color="#f9f5ea"/>
       <stop offset="100%" stop-color="#f0ebda"/>
     </linearGradient>
+    <g id="floatTile">
+      <rect x="0" y="0" width="54" height="72" rx="7" fill="url(#tileFace)" stroke="#cbc5ae" stroke-width="1.5"/>
+    </g>
   </defs>
 
   <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- 飄浮麻將牌背景裝飾（呼應大廳頁的漂浮牌動畫，這裡取靜態的某一幀） -->
+  <g opacity=".16">
+    <use href="#floatTile" x="140" y="60" transform="rotate(-12 167 96)"/>
+    <use href="#floatTile" x="480" y="30" transform="rotate(8 507 66)"/>
+    <use href="#floatTile" x="640" y="470" transform="rotate(-6 667 506)"/>
+    <use href="#floatTile" x="60" y="430" transform="rotate(10 87 466)"/>
+    <use href="#floatTile" x="1080" y="470" transform="rotate(-14 1107 506)"/>
+    <use href="#floatTile" x="30" y="230" transform="rotate(6 57 266)"/>
+    <use href="#floatTile" x="760" y="60" transform="rotate(-9 787 96)"/>
+  </g>
 
   <!-- 雙線裱框，呼應遊戲介面的邊框設計 -->
   <rect x="28" y="28" width="1144" height="574" rx="18" fill="none" stroke="rgba(232,200,106,.28)" stroke-width="2"/>
@@ -25,16 +39,16 @@
   <!-- 三張斜置麻將牌裝飾（右側） -->
   <g transform="translate(870,190) rotate(-8)">
     <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
-    <text x="64" y="78" font-family="Georgia, 'Noto Serif TC', serif" font-size="60" font-weight="900" fill="#1e7a45" text-anchor="middle">發</text>
+    <text x="64" y="107" font-family="'Noto Serif TC', Georgia, serif" font-size="60" font-weight="900" fill="#1e7a45" text-anchor="middle" dominant-baseline="alphabetic">發</text>
   </g>
   <g transform="translate(960,215) rotate(6)">
     <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
-    <text x="64" y="80" font-family="Georgia, 'Noto Serif TC', serif" font-size="58" font-weight="900" fill="#c0392b" text-anchor="middle">中</text>
+    <text x="64" y="106" font-family="'Noto Serif TC', Georgia, serif" font-size="58" font-weight="900" fill="#c0392b" text-anchor="middle">中</text>
   </g>
   <g transform="translate(915,290) rotate(-2)">
     <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
-    <text x="64" y="105" font-family="Georgia, serif" font-size="52" font-weight="900" fill="#1f5fa8" text-anchor="middle">8</text>
-    <text x="64" y="60" font-family="'Noto Serif TC', serif" font-size="34" font-weight="900" fill="#1f5fa8" text-anchor="middle">萬</text>
+    <text x="64" y="72" font-family="Georgia, serif" font-size="38" font-weight="900" fill="#1f5fa8" text-anchor="middle">8</text>
+    <text x="64" y="130" font-family="'Noto Serif TC', serif" font-size="50" font-weight="900" fill="#1f5fa8" text-anchor="middle">萬</text>
   </g>
 
   <!-- 主標題 -->
