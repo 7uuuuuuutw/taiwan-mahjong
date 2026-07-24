@@ -94,7 +94,9 @@ class GameEngine {
   /** 斷線者重連：解除暫停，並針對目前階段重新驅動（重送目前該行動的人
    *  的可行動作／重啟逾時計時），讓所有人（含剛重連的人）畫面立即跟上。 */
   resumeGame(seat) {
-    if (!this.paused) return;
+    // 保險：只有真正暫停中、且座位對得上目前記錄的暫停者才能恢復，避免
+    // 呼叫端傳錯座位時誤把別人標成已連線、錯亂暫停狀態。
+    if (!this.paused || seat !== this.pausedSeat) return;
     this.paused = false;
     this.pausedSeat = null;
     if (this.seats[seat]) this.seats[seat].connected = true;

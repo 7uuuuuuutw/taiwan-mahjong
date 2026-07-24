@@ -48,18 +48,26 @@ class NetworkManager {
     const id = ROOM_PREFIX + this.roomCode;
     this.peer = new Peer(id, { debug: 1, config: ICE_SERVERS });
 
-    this.peer.on('open', () => onReady && onReady(this.roomCode));
+    // 涵蓋整個開房流程的逾時保護：peer.on('open') 若因連不上 PeerJS 訊號
+    // 伺服器而永遠不觸發（訊號伺服器連線卡住時不一定會觸發 error），
+    // 開房／房主轉移時接手就會卡死、呼叫端永遠等不到 onReady 或
+    // onError，外層的重試/重連流程也就永遠沒有機會執行下一步。
+    let settled = false;
+    const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); fn && fn(arg); };
+    const timer = setTimeout(() => finish(onError, new Error('開房逾時，請檢查網路連線後再試一次')), 16000);
+
+    this.peer.on('open', () => finish(onReady, this.roomCode));
     this.peer.on('error', (err) => {
       // 房號被占用 → 換一個重試一次（強制指定房號時不能換，直接回報失敗，
       // 讓呼叫端自己決定要不要重試——通常是舊房主的 id 還沒真的釋放）
       if (err.type === 'unavailable-id' && !forcedRoomCode) {
         this.roomCode = randomRoomCode();
         this.peer = new Peer(ROOM_PREFIX + this.roomCode, { debug: 1, config: ICE_SERVERS });
-        this.peer.on('open', () => onReady && onReady(this.roomCode));
+        this.peer.on('open', () => finish(onReady, this.roomCode));
         this.peer.on('connection', (c) => this._onHostConnection(c));
-        this.peer.on('error', (e2) => onError && onError(e2));
+        this.peer.on('error', (e2) => finish(onError, e2));
       } else {
-        onError && onError(err);
+        finish(onError, err);
       }
     });
     this.peer.on('connection', (c) => this._onHostConnection(c));
@@ -95,24 +103,30 @@ class NetworkManager {
     this.myName = name;
     this.roomCode = roomCode.trim().toUpperCase();
     this.peer = new Peer({ debug: 1, config: ICE_SERVERS });
+
+    // 逾時保護要包住「連上 PeerJS 訊號伺服器」到「跟房主的資料連線真的
+    // 打開」全程，從呼叫當下就開始算，不能只包在 peer.on('open') 裡面
+    // ——舊版逾時是巢狀寫在 peer.on('open') 內部，若連訊號伺服器本身都
+    // 連不上（peer.on('open') 永遠不觸發，這種卡住的狀況也不一定會觸發
+    // error），這次嘗試就會整個卡死不動，外層 rejoinAfterMigration 的
+    // 重試迴圈永遠等不到失敗通知去換下一次嘗試，看起來就是「重連卡住、
+    // 有時候就是連不回去」。
+    let settled = false;
+    const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); fn && fn(arg); };
+    const timer = setTimeout(() => finish(onError, new Error('連線逾時——請確認房號是否正確；若房號沒錯，可能是雙方網路環境限制了直接連線，可以換個網路（例如都用同一個 Wi-Fi）再試一次')), 16000);
+
     this.peer.on('open', () => {
       const conn = this.peer.connect(ROOM_PREFIX + this.roomCode, { reliable: true });
       this.hostConn = conn;
-      let opened = false;
       conn.on('open', () => {
-        opened = true;
         conn.send({ type: 'join', name, ...(joinExtra || {}) });
-        onReady && onReady();
+        finish(onReady);
       });
       conn.on('data', (msg) => this._fire('hostMessage', { msg }));
       conn.on('close', () => this._fire('hostLeft', {}));
-      conn.on('error', (e) => onError && onError(e));
-      // 連線逾時：常見成因是房號打錯，但也可能是雙方網路環境（NAT）
-      // 導致直連失敗，即使有 TURN 備援也可能要多等一下才連得上，訊息
-      // 兩種可能都提示，不要只怪房號。
-      setTimeout(() => { if (!opened) onError && onError(new Error('連線逾時——請確認房號是否正確；若房號沒錯，可能是雙方網路環境限制了直接連線，可以換個網路（例如都用同一個 Wi-Fi）再試一次')); }, 16000);
+      conn.on('error', (e) => finish(onError, e));
     });
-    this.peer.on('error', (err) => onError && onError(err));
+    this.peer.on('error', (err) => finish(onError, err));
   }
 
   /** client: 傳給 host */
