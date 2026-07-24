@@ -137,7 +137,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-end').onclick = endGame;
   document.getElementById('btn-lobby').onclick = backToLobby;
   // 常駐胡牌鈕：按錯（牌未成）= 詐胡賠付！
-  document.getElementById('btn-hu').onclick = () => sendAction({ type: 'declareHu' });
+  document.getElementById('btn-hu').onclick = sendHuAttempt;
   document.getElementById('btn-copy').onclick = () => {
     const code = document.getElementById('room-code-display').textContent;
     navigator.clipboard && navigator.clipboard.writeText(code);
@@ -1169,6 +1169,18 @@ function sendClaim(decision) {
   clearActions();
   if (net.isHost && engine) engine.playerAct(mySeat, decision);
   else net.sendToHost({ type: 'claim', decision });
+}
+
+/** 常駐胡牌鈕：跟一般行動列的按鈕不一樣，這是「隨時可按」的獨立動作，
+ *  不屬於當下行動列的選項，不能像 sendAction() 那樣先清空行動列——
+ *  例如骰子還沒擲、莊家的擲骰按鈕正顯示在行動列時誤觸胡鈕，引擎會直接
+ *  no-op（見 declareHuAttempt 開頭的階段判斷），不會有任何後續狀態
+ *  改變，行動列就該原封不動留著，不能被清掉。真的成立時（自摸／胡／
+ *  詐胡）engine 會觸發 handOver，由 showHandOver() 自己負責清空。 */
+function sendHuAttempt() {
+  const action = { type: 'declareHu' };
+  if (net.isHost && engine) engine.playerAct(mySeat, action);
+  else net.sendToHost({ type: 'action', action });
 }
 
 /* ============================================================
