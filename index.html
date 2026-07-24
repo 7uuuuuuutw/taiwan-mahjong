@@ -11,25 +11,27 @@
        這個 meta 標籤才是真正可靠、逐頁生效的機制。 -->
   <meta name="robots" content="noindex, nofollow">
   <!-- 分享預覽（LINE/Discord/FB 貼連結會用這些欄位產生預覽卡）。
-       og-image 是手繪的 SVG（沒有截圖工具/圖片轉檔環境，直接畫），大多數
-       平台（Discord、FB）能吃 SVG 當預覽圖；少數只認點陣圖的用戶端
-       （例如某些 Twitter/X 用戶端）可能顯示不出來，退回純文字預覽卡。 -->
+       og-image.svg 是設計來源檔（方便之後調整），實際拿來當 og:image 的
+       是轉出來的 og-image.png——原本直接用 SVG 當預覽圖，部分平台的
+       縮圖產生器不支援 SVG，顯示出來變成亂碼，改成點陣圖才是真正
+       所有平台都吃得下的格式。 -->
   <meta property="og:title" content="台灣麻將 · 連線對戰">
   <meta property="og:description" content="十六張台灣麻將，開房連線立即跟朋友對戰，不滿四人自動補電腦。">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://7uuuuuuutw.github.io/taiwan-mahjong/og-image.svg">
+  <meta property="og:image" content="https://7uuuuuuutw.github.io/taiwan-mahjong/og-image.png">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://7uuuuuuutw.github.io/taiwan-mahjong/og-image.svg">
+  <meta name="twitter:image" content="https://7uuuuuuutw.github.io/taiwan-mahjong/og-image.png">
   <!-- favicon：用麻將牌 emoji 畫成 SVG，不用額外準備圖檔 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%80%84%3C/text%3E%3C/svg%3E">
   <!-- 思源宋體（明體）：中文標題與牌型宣告用；斷網時退回系統明體 -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=113 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=113">
+  <!-- v= 版本號：每次改版把下面所有 v=114 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=114">
 </head>
 <body>
 
@@ -276,12 +278,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=113"></script>
-  <script src="tiles.js?v=113"></script>
-  <script src="sound.js?v=113"></script>
-  <script src="ai.js?v=113"></script>
-  <script src="game.js?v=113"></script>
-  <script src="network.js?v=113"></script>
-  <script src="main.js?v=113"></script>
+  <script src="mahjong.js?v=114"></script>
+  <script src="tiles.js?v=114"></script>
+  <script src="sound.js?v=114"></script>
+  <script src="ai.js?v=114"></script>
+  <script src="game.js?v=114"></script>
+  <script src="network.js?v=114"></script>
+  <script src="main.js?v=114"></script>
 </body>
 </html>
