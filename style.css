@@ -947,5 +947,10 @@ input[type=text] {
   .glass-dice .die { font-size: 1.4rem; }
   .glass-shine { width: 27px; height: 14px; top: 10px; left: 16px; }
   .glass-bonus { font-size: .58rem; }
-  .seat-left .tile-back-left, .seat-right .tile-back-right { width: 54px; height: 20px; }
+  /* 寬度改成對齊對家手牌牌面「真的轉90度」該有的寬度（對家手牌手機版
+     是 28x38，轉90度後應為 38x28），縮小前的 54px 明顯比這個寬很多，
+     跟對家牌面的比例對不上。高度先不動——欄位是直排疊 16 張，稍微
+     加高就會讓整疊長度暴增，容易超出可用高度，跟之前一路避免棄牌區/
+     手牌被擠壓捲動的取捨衝突。 */
+  .seat-left .tile-back-left, .seat-right .tile-back-right { width: 38px; height: 20px; }
 }
