@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>台灣麻將 · 連線對戰</title>
   <meta name="description" content="十六張台灣麻將，開房連線立即跟朋友對戰，不滿四人自動補電腦。">
+  <!-- 不希望被搜尋引擎收錄索引，只靠分享連結給朋友——robots.txt 放在
+       repo 根目錄，但這個網站是 xxx.github.io/專案名 的子路徑，不符合
+       robots.txt 必須放在網域根目錄的慣例，遵守規範的爬蟲不一定會找到；
+       這個 meta 標籤才是真正可靠、逐頁生效的機制。 -->
+  <meta name="robots" content="noindex, nofollow">
   <!-- 分享預覽（LINE/Discord/FB 貼連結會用這些欄位產生預覽卡） -->
   <meta property="og:title" content="台灣麻將 · 連線對戰">
   <meta property="og:description" content="十六張台灣麻將，開房連線立即跟朋友對戰，不滿四人自動補電腦。">
@@ -16,8 +21,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=95 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=95">
+  <!-- v= 版本號：每次改版把下面所有 v=96 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=96">
 </head>
 <body>
 
@@ -264,12 +269,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=95"></script>
-  <script src="tiles.js?v=95"></script>
-  <script src="sound.js?v=95"></script>
-  <script src="ai.js?v=95"></script>
-  <script src="game.js?v=95"></script>
-  <script src="network.js?v=95"></script>
-  <script src="main.js?v=95"></script>
+  <script src="mahjong.js?v=96"></script>
+  <script src="tiles.js?v=96"></script>
+  <script src="sound.js?v=96"></script>
+  <script src="ai.js?v=96"></script>
+  <script src="game.js?v=96"></script>
+  <script src="network.js?v=96"></script>
+  <script src="main.js?v=96"></script>
 </body>
 </html>

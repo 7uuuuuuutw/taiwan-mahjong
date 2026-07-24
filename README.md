@@ -1,5 +1,7 @@
 # 台灣麻將 · 連線對戰
 
+**[👉 立即遊玩](https://7uuuuuuutw.github.io/taiwan-mahjong/)**（免安裝，開房後把房號給朋友即可一起玩）
+
 16 張台灣麻將網頁，支援 P2P 連線對戰與電腦 AI 補位。
 
 © 2026 7u — All Rights Reserved. 本專案為 source-available（原始碼可見但非開源），
