@@ -17,10 +17,24 @@ const Sound = (function () {
     return actx;
   }
 
-  /** 首次使用者互動後解鎖音訊（避免瀏覽器自動播放限制） */
+  /** 首次使用者互動後解鎖音訊（避免瀏覽器自動播放限制）。
+   *  Web Audio（打牌「喀」聲）跟 SpeechSynthesis（碰／吃／槓語音報牌）
+   *  是瀏覽器裡完全獨立的兩套 API，各自有各自的「需要使用者手勢才能
+   *  播放」限制——手機瀏覽器（尤其 iOS Safari）對 SpeechSynthesis 管得
+   *  更嚴，沒有在使用者手勢當下真的呼叫過一次 speak()，之後從遊戲事件
+   *  （非使用者當下點擊）觸發的語音很容易靜默失敗，聽起來像「吃碰完全
+   *  沒有聲音」（其實只是報牌語音沒出來，敲擊聲仍正常）。這裡補上
+   *  SpeechSynthesis 的解鎖：說一句音量 0 的空白句子。 */
   function resume() {
     const c = ctx();
     if (c && c.state === 'suspended') c.resume().catch(() => {});
+    if (window.speechSynthesis) {
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+    }
   }
 
   /** 單一音符 */
