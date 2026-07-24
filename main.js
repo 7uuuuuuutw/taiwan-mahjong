@@ -239,14 +239,26 @@ function showSpeech(seatIdx, text) {
   setTimeout(() => { if (b.parentNode) b.remove(); }, 3400);
 }
 
-/** 讓某座位的 AI 依情境說一句話（chance = 開口機率） */
-function maybeSpeak(seatIdx, event, chance = 1) {
+/** 台語骰仔喊法：5/9/13 喊「頭」，6/10/14 喊「出」，3/7/11 喊「tshuan」
+ *  （無通用漢字，直接用台羅），4/8/12 喊「底」——依總點數 %4 循環。 */
+const DICE_CALL_TERMS = ['底', '頭', '出', 'tshuan']; // 索引＝總點數 % 4
+const NUM_CH = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八'];
+function diceCallText(diceArr) {
+  const total = diceArr.reduce((a, b) => a + b, 0);
+  return NUM_CH[total] + DICE_CALL_TERMS[total % 4];
+}
+
+/** 讓某座位的 AI 依情境說一句話（chance = 開口機率）。
+ *  extra：目前只給 dice 事件用，動態組出台語骰仔喊法（見 diceCallText）。 */
+function maybeSpeak(seatIdx, event, chance = 1, extra) {
   if (seatIdx == null || seatIdx < 0 || !lastView) return;
   const s = lastView.seats[seatIdx];
   if (!s || !s.isAI) return;
   const ch = charOf(s.name);
   if (!ch || !ch.lines[event] || Math.random() > chance) return;
-  const lines = ch.lines[event];
+  const raw = ch.lines[event];
+  const lines = typeof raw === 'function' ? raw(extra) : raw;
+  if (!lines || !lines.length) return;
   showSpeech(seatIdx, lines[Math.floor(Math.random() * lines.length)]);
 }
 
@@ -560,7 +572,8 @@ const AI_CHARACTERS = [
     tsumo: ['自摸啦！緊來看！', '天公疼憨人～自摸！'],
     lose: ['唉唷，煞去了了…', '這張嘸應該打的啦…'],
     draw: ['流局喔，摸心酸的', '嘸魚蝦也好…再來！'],
-    dice: ['骰仔有靈聖喔！', '你看這手氣！'],
+    // 台語骰仔喊法：喊出「頭／出／tshuan／底」，老江湖擲骰的真功夫
+    dice: (diceArr) => diceArr ? [`${diceCallText(diceArr)}！骰仔有靈聖喔！`, `${diceCallText(diceArr)}！你看這手氣！`] : ['骰仔有靈聖喔！', '你看這手氣！'],
     mock: ['啊你是在胡啥啦！', '憨囝仔，詐胡是要賠錢的餒'],
   }},
   { name: '阿花姨', emoji: '🌺', style: 'aggressive', lines: { // 菜市場戰神，愛碎念
@@ -1243,7 +1256,11 @@ function renderView(view) {
     else if (/摸牌$/.test(msg)) { if (actor >= 0) skipStreak[actor] = 0; } // 正常摸到牌，歸零連續被跳過次數
     else if (msg === '開始新局') {
       // 開局：骰運好的莊家吹噓；其他 AI 隨機寒暄
-      if (view.diceBonusName) maybeSpeak(view.dealer, 'dice', .95);
+      // 有動態喊骰台詞（例：旺來伯的台語骰仔喊法）的角色每次擲骰都喊，
+      // 不用等有骰子加成才開口——喊點數本來就跟有沒有中獎無關。
+      const dealerChar = view.seats[view.dealer] && view.seats[view.dealer].isAI ? charOf(view.seats[view.dealer].name) : null;
+      const dynamicDiceCall = dealerChar && typeof dealerChar.lines.dice === 'function';
+      if (view.diceBonusName || dynamicDiceCall) maybeSpeak(view.dealer, 'dice', .95, view.dice);
       view.seats.forEach((s, i) => {
         if (s.isAI && i !== view.dealer) setTimeout(() => maybeSpeak(i, 'greet', .3), 300 + i * 500);
       });
