@@ -555,6 +555,15 @@ input[type=text] {
   .discard-pool { flex: 1 1 auto; max-width: 720px; margin: 0 auto; }
 }
 
+/* 空間夠寬「而且」夠高才放大棄牌尺寸——只看寬度不夠，橫向的平板/筆電
+   視窗矮下去時（例如瀏覽器視窗沒開滿），放大過的棄牌會擠到需要捲動
+   才看得到全部，跟需求「不要大到要滑動」相反。用瀏覽器實測過：
+   1024×620 這種矮視窗下 30x40 已經會溢出，1024×650 以上才穩定夠用，
+   這裡抓 700px 留一點餘裕。 */
+@media (min-width: 768px) and (min-height: 700px) {
+  .tile.discarded { width: 30px; height: 40px; font-size: 12px; }
+}
+
 /* ---------- 中央區：剛打出的牌（放大）＋骰盅 ----------
  * 改用絕對定位、完全脫離棄牌池的網格排版（原本用 grid-row/column 佔格＋
  * padding-bottom 撐開高度，這個高度會算進第 2 列(2fr)的量測，一旦牌變
