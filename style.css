@@ -221,7 +221,13 @@ input[type=text] {
 
 .table {
   flex: 1; display: flex; flex-direction: column;
-  padding: 10px; gap: 6px; min-height: 0;
+  /* #game-screen 是縱向 flex，align-items:center（繼承自 .screen.active）
+     預設會讓 .table 依內容縮到「剛好夠用」的寬度再置中，不會撐滿螢幕
+     ——寬螢幕下這會讓上下家手牌離邊框很遠。用 align-self:stretch 讓
+     .table 強制撐滿可用寬度，貼邊才有意義。 */
+  align-self: stretch;
+  /* 左右留一點點邊距就好，讓上下家手牌盡量貼齊畫面邊框 */
+  padding: 10px 4px; gap: 6px; min-height: 0;
 }
 .table-middle { flex: 1; display: flex; gap: 6px; min-height: 0; }
 
@@ -538,6 +544,16 @@ input[type=text] {
 .discard-right { grid-area: right; justify-content: flex-end; }
 .tile.discarded { width: 26px; height: 34px; font-size: 11px; opacity: .95; }
 .tile.just-discarded { box-shadow: 0 0 10px var(--gold); border-color: var(--gold); }
+
+/* 平板／桌機（螢幕夠寬）：棄牌池固定大小，不要隨視窗越寬就一直被
+   flex:1 撐大——寬螢幕下改成置中在上下家手牌之間，讓多出來的空間留白，
+   而不是把棄牌池拉得又寬又扁。手機螢幕仍維持上面 flex:1 的彈性版面，
+   避免重演之前「棄牌池被擠壓過窄」的問題（見窄螢幕的響應式區塊）。
+   flex-shrink 保留：螢幕剛好落在斷點附近時，還是能視需要縮一點，
+   不會硬撐爆版面。 */
+@media (min-width: 768px) {
+  .discard-pool { flex: 1 1 480px; max-width: 480px; margin: 0 auto; }
+}
 
 /* ---------- 中央區：剛打出的牌（放大）＋骰盅 ----------
  * 改用絕對定位、完全脫離棄牌池的網格排版（原本用 grid-row/column 佔格＋
