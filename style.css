@@ -545,14 +545,14 @@ input[type=text] {
 .tile.discarded { width: 26px; height: 34px; font-size: 11px; opacity: .95; }
 .tile.just-discarded { box-shadow: 0 0 10px var(--gold); border-color: var(--gold); }
 
-/* 平板／桌機（螢幕夠寬）：棄牌池固定大小，不要隨視窗越寬就一直被
-   flex:1 撐大——寬螢幕下改成置中在上下家手牌之間，讓多出來的空間留白，
-   而不是把棄牌池拉得又寬又扁。手機螢幕仍維持上面 flex:1 的彈性版面，
-   避免重演之前「棄牌池被擠壓過窄」的問題（見窄螢幕的響應式區塊）。
-   flex-shrink 保留：螢幕剛好落在斷點附近時，還是能視需要縮一點，
-   不會硬撐爆版面。 */
+/* 平板／桌機（螢幕夠寬）：棄牌池用剩餘空間撐大，但設一個上限，不要
+   隨超寬螢幕無止盡撐大變得又寬又扁。跟原本「單純 flex:1」的差別是
+   多了 max-width 上限；跟「寫死 480px 固定值」的差別是改回吃滿剩餘
+   空間（flex-basis:auto + flex-grow:1），平板等中等寬度不會有一大片
+   閒置的綠色空白。手機螢幕仍維持上面 flex:1 的彈性版面，避免重演之前
+   「棄牌池被擠壓過窄」的問題（見窄螢幕的響應式區塊）。 */
 @media (min-width: 768px) {
-  .discard-pool { flex: 1 1 480px; max-width: 480px; margin: 0 auto; }
+  .discard-pool { flex: 1 1 auto; max-width: 720px; margin: 0 auto; }
 }
 
 /* ---------- 中央區：剛打出的牌（放大）＋骰盅 ----------
