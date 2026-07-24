@@ -276,7 +276,7 @@ input[type=text] {
  * 擠到版面最下方。這裡改成 hand 與 extras 各佔一個獨立網格格，
  * extras 內部用 flex 直排 melds+flowers，靠 align-self 置中即可。 */
 .seat-left, .seat-right {
-  display: grid; width: clamp(90px, 24vw, 175px); gap: 4px 10px; flex-shrink: 0;
+  display: grid; width: clamp(84px, 22vw, 175px); gap: 4px 4px; flex-shrink: 0;
   align-content: center; justify-content: center;
 }
 .seat-left {
@@ -917,12 +917,17 @@ input[type=text] {
   .tile { width: 28px; height: 38px; font-size: 12px; }
   .seat-bottom .seat-hand .tile { width: 32px; height: 44px; font-size: 15px; }
   .tile.discarded { width: 20px; height: 27px; font-size: 9px; }
-  /* 上下家棄牌區（discard-left/right）欄位很窄，20px 的棄牌一欄就快占滿，
-     只能疊成一直行；縮小這兩區專用的棄牌尺寸，讓它至少能排成兩欄。 */
+  /* 棄牌池三欄改成平均切三份（原本中間欄故意分比較寬給骰盅／中央棄牌，
+     但骰盅、中央棄牌其實是絕對定位置中在整個棄牌池上，不吃格線寬度，
+     縮小中間欄不影響它們的位置）——讓上下家（左右）棄牌欄變寬，才有
+     空間放大棄牌尺寸。允許壓到骰盅圈（骰盅比中央棄牌牌面寬很多，本來
+     就會被蓋到一點），但欄位邊界仍留在中央棄牌牌面（pool-center）外側，
+     不會真的接觸到剛打出的那張放大牌。 */
+  .discard-pool { grid-template-columns: 1fr 1fr 1fr; }
   .discard-left .tile.discarded, .discard-right .tile.discarded {
-    width: 16px; height: 22px; font-size: 7px;
+    width: 24px; height: 32px; font-size: 10px;
   }
-  .discard-left, .discard-right { gap: 1px; }
+  .discard-left, .discard-right { gap: 2px; }
 
   /* 頂部資訊列窄螢幕下不換行——莊家名字（AI 名字+連莊字樣）一長就會把
      音效/離開按鈕擠到第二行，多佔一整行高度。改成不換行、莊家名字
