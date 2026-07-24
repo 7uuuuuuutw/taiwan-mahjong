@@ -206,6 +206,8 @@ function attemptSessionResume() {
 // 音效用：追蹤狀態變化以觸發對應聲音
 let sndPrevDiscards = 0;
 let sndPrevMsg = '';
+// 棄牌內容吐槽（金三銀七／放鳥咬錢）去重用：記錄上次已處理過的棄牌
+let sndPrevDiscardKey = '';
 // 中央大牌動畫去重（防吃碰考慮期的二次閃爍）
 let prevCenterKey = '';
 
@@ -568,13 +570,37 @@ const AI_CHARACTERS = [
     chi: ['呷一下無要緊乎？', '吃！嘸通見怪～'],
     kong: ['槓落去！氣魄啦！', '哈！四支全到齊'],
     flower: ['喔～有花有春！', '花開富貴啦！'],
-    win: ['哈哈，緊來算台！', '少年仔，學著點～'],
-    tsumo: ['自摸啦！緊來看！', '天公疼憨人～自摸！'],
+    // 衰人到尾斗：北風北才翻身贏的人，自己講這句展現「這才是真本事」
+    win: (extra) => (extra && extra.comeback)
+      ? ['衰人到尾斗啦！這才叫真本事！', '拚到最後一巡，就是要這種氣魄！']
+      : ['哈哈，緊來算台！', '少年仔，學著點～'],
+    tsumo: (extra) => (extra && extra.comeback)
+      ? ['衰人到尾斗，自摸翻身！', '拖到北風北才自摸，值啦！']
+      : ['自摸啦！緊來看！', '天公疼憨人～自摸！'],
     lose: ['唉唷，煞去了了…', '這張嘸應該打的啦…'],
     draw: ['流局喔，摸心酸的', '嘸魚蝦也好…再來！'],
-    // 台語骰仔喊法：喊出「頭／出／tshuan／底」，老江湖擲骰的真功夫
-    dice: (diceArr) => diceArr ? [`${diceCallText(diceArr)}！骰仔有靈聖喔！`, `${diceCallText(diceArr)}！你看這手氣！`] : ['骰仔有靈聖喔！', '你看這手氣！'],
+    // 台語骰仔喊法：喊出「頭／出／tshuan／底」，老江湖擲骰的真功夫；
+    // 莊家自己骰到 9（九頭）氣勢特別旺，換一句展現氣魄的喊法
+    dice: (diceArr) => {
+      if (!diceArr) return ['骰仔有靈聖喔！', '你看這手氣！'];
+      const term = diceCallText(diceArr);
+      const total = diceArr.reduce((a, b) => a + b, 0);
+      if (total === 9) return [`${term}贏甲目屎流！`, `${term}！穩贏的啦，緊來算錢！`];
+      return [`${term}！骰仔有靈聖喔！`, `${term}！你看這手氣！`];
+    },
     mock: ['啊你是在胡啥啦！', '憨囝仔，詐胡是要賠錢的餒'],
+    // 碰碰胡跡象：外表嚇人、內容普通的調侃
+    pongpongWarn: ['外口碰碰胡，內底爛糊糊啦！', '看起來嚇死人，其實差不多啦'],
+    // 有人補花：看花就知衰
+    flowerMock: ['看花就知衰喔！', '補花補心酸的啦，運氣攏總去了'],
+    // 有人打出 3 或 7：金三銀七，捨得放的調侃
+    keepThreeSeven: ['金三銀七你甘知影？這款好牌也捨得放？', '三跟七是實牌呢，放了敢不可惜'],
+    // 有人打出一索（1 索傳統畫鳥）：放鳥咬錢
+    birdDiscard: ['放鳥咬錢啊！', '這隻鳥仔放出去，錢也跟著飛啦'],
+    // 有人放槍：落牌，輸甲落下頦
+    mockLoser: ['落牌喔，輸甲落下頦！', '哎唷，下頦要掉落來了齁'],
+    // 北風北坐莊：拚連莊倒贏的氣勢喊話
+    finalStand: ['北仔尾啊！連家伙，拚一把！', '尾仔關頭，倒贏才是真本事！'],
   }},
   { name: '阿花姨', emoji: '🌺', style: 'aggressive', lines: { // 菜市場戰神，愛碎念
     greet: ['我跟你說，我今天手氣特別好', '等我一下，滷肉還在爐上'],
@@ -1239,6 +1265,20 @@ function renderView(view) {
 
   // ---- 音效觸發 ----
   const totalDiscards = view.seats.reduce((a, s) => a + (s.discards ? s.discards.length : 0), 0);
+
+  // 棄牌內容相關的角色吐槽（金三銀七、放鳥咬錢）：跟 msg 文字無關，直接看
+  // lastDiscard 內容是否變化，避免同一次棄牌因重複 render 而觸發多次
+  if (view.lastDiscard) {
+    const discardKey = view.lastDiscard.from + ':' + view.lastDiscard.tile + ':' + totalDiscards;
+    if (discardKey !== sndPrevDiscardKey) {
+      sndPrevDiscardKey = discardKey;
+      const dt = view.lastDiscard.tile;
+      const rank = (dt[0] === 'm' || dt[0] === 'p' || dt[0] === 's') ? dt.slice(1) : null;
+      if (rank === '3' || rank === '7') maybeCommentOn(view.lastDiscard.from, 'keepThreeSeven', .35);
+      else if (dt === 's1') maybeCommentOn(view.lastDiscard.from, 'birdDiscard', .4);
+    }
+  }
+
   const msg = view.stateMessage || '';
   if (msg !== sndPrevMsg) {
     // 報牌：碰／吃／槓（優先於單純打牌聲）
@@ -1252,7 +1292,7 @@ function renderView(view) {
     if (/碰$/.test(msg)) { maybeSpeak(actor, 'pong', .6); trackSkippedDraw(actor); }
     else if (/吃$/.test(msg)) { maybeSpeak(actor, 'chi', .6); trackSkippedDraw(actor); }
     else if (/槓$/.test(msg)) { maybeSpeak(actor, 'kong', .75); trackSkippedDraw(actor); }
-    else if (/補花 \d+ 張$/.test(msg)) maybeSpeak(actor, 'flower', .55);
+    else if (/補花 \d+ 張$/.test(msg)) { maybeSpeak(actor, 'flower', .55); maybeCommentOn(actor, 'flowerMock', .3); }
     else if (/摸牌$/.test(msg)) { if (actor >= 0) skipStreak[actor] = 0; } // 正常摸到牌，歸零連續被跳過次數
     else if (msg === '開始新局') {
       // 開局：骰運好的莊家吹噓；其他 AI 隨機寒暄
@@ -1261,6 +1301,11 @@ function renderView(view) {
       const dealerChar = view.seats[view.dealer] && view.seats[view.dealer].isAI ? charOf(view.seats[view.dealer].name) : null;
       const dynamicDiceCall = dealerChar && typeof dealerChar.lines.dice === 'function';
       if (view.diceBonusName || dynamicDiceCall) maybeSpeak(view.dealer, 'dice', .95, view.dice);
+      // 北仔尾（北風北坐莊）：錯開骰仔喊話的泡泡秒數，等它淡出再喊，
+      // 不然同一位置的對話泡泡會被立刻蓋掉看不到。
+      if (view.roundWind === 3 && view.dealer === 3) {
+        setTimeout(() => maybeSpeak(view.dealer, 'finalStand', .7), 1800);
+      }
       view.seats.forEach((s, i) => {
         if (s.isAI && i !== view.dealer) setTimeout(() => maybeSpeak(i, 'greet', .3), 300 + i * 500);
       });
@@ -1760,8 +1805,14 @@ function showHandOver(payload) {
   clearActions();
   // ---- 電腦角色勝負對話 ----
   if (payload.result === 'win') {
-    (payload.winners || []).forEach(w => maybeSpeak(w.seat, w.selfDraw ? 'tsumo' : 'win', .95));
-    if (payload.from != null) maybeSpeak(payload.from, 'lose', .9);
+    // 衰人到尾斗：北風北坐莊這局才翻身贏、且原本分數落後，才算「拚到最後一刻」
+    const finalHandNow = lastView && lastView.roundWind === 3 && lastView.dealer === 3;
+    (payload.winners || []).forEach(w => {
+      const seatBefore = lastView && lastView.seats[w.seat];
+      const comeback = !!(finalHandNow && seatBefore && seatBefore.score < 0);
+      maybeSpeak(w.seat, w.selfDraw ? 'tsumo' : 'win', .95, { comeback });
+    });
+    if (payload.from != null) { maybeSpeak(payload.from, 'lose', .9); maybeCommentOn(payload.from, 'mockLoser', .4); }
   } else if (payload.result === 'draw' && lastView) {
     const ais = lastView.seats.map((s, i) => s.isAI ? i : -1).filter(i => i >= 0);
     if (ais.length) maybeSpeak(ais[Math.floor(Math.random() * ais.length)], 'draw', .8);
