@@ -71,8 +71,14 @@ function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {
     // 實際還剩幾張（根據公開資訊統計）加總、除以 4 正規化——同樣能讓
     // 向聽數進步，剩 4 張沒人碰過的牌跟只剩 0 張的牌，期望值天差地遠。
     score += ukeireCount(rest, melds, visCounts) * sp.ukeireWeight * levelMult;
-    // 防守：別家棄過的牌視為安全牌
-    if (safeTiles && safeTiles.has(t)) score += sp.safeWeight * levelMult;
+    // 防守：hard 等級改用「放槍期望值」（各家聽牌危險度 × 潛在台數權重，
+    // 現物＝過水規則下對該家保證安全則不計），比單純「有人棄過就安全」
+    // 更能反映機率；easy/normal 維持原本的簡單二分安全判斷。
+    if (level === 'hard' && ctx && ctx.dangerInfo) {
+      score -= (dealInRisk(t, ctx.mySeat, ctx) / 3) * sp.safeWeight * levelMult;
+    } else if (safeTiles && safeTiles.has(t)) {
+      score += sp.safeWeight * levelMult;
+    }
     // 追一色：打出非優勢花色的牌加分
     if (sp.flushBias && majoritySuit && isSuited(t) && t[0] !== majoritySuit) score += sp.flushBias;
     // 賭性：加入隨機擾動，偶爾出人意表
@@ -80,6 +86,38 @@ function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {
     if (score > bestScore) { bestScore = score; bestTile = t; }
   }
   return bestTile;
+}
+
+/** 各家「聽牌危險度」粗估：只看公開資訊——已亮面子數。面子亮得越多，
+ *  代表暗牌越少、離聽牌越近，愈危險。台灣麻將沒有立直宣告可以直接看，
+ *  這是能拿到的最直接聽牌訊號（5 面子＋1 對子的牌型，亮滿 4 組面子
+ *  基本上就只差最後一組＋對子，幾乎等同聽牌）。 */
+const DANGER_BY_MELDS = [0.12, 0.25, 0.45, 0.7, 0.95];
+function meldDanger(meldCount) {
+  return DANGER_BY_MELDS[Math.min(meldCount, DANGER_BY_MELDS.length - 1)];
+}
+
+/** 潛在台數權重的粗估代理：花牌收越多，胡了台數通常越高，放槍的期望
+ *  損失也跟著放大——不用真的去猜牌型，用花數當簡單代理就好。 */
+function valueWeight(flowerCount) {
+  return 1 + Math.min(flowerCount, 8) * 0.06;
+}
+
+/** 打出某張牌的「放槍期望值」風險：對每一家分別算「聽牌危險度 × 潛在
+ *  台數權重」再加總；若這張牌是該家自己棄過的（現物，過水規則下保證
+ *  不會放槍給他），那一家就不計風險。比「只要有人棄過就算安全」更貼近
+ *  期望值——對聽牌機率高、可能台數大的對手更小心，面子還很少的對手
+ *  就不必過度保守。 */
+function dealInRisk(tile, mySeat, ctx) {
+  if (!ctx || !ctx.dangerInfo) return 0;
+  let risk = 0;
+  ctx.dangerInfo.forEach((info, i) => {
+    if (i === mySeat || !info) return;
+    const discardedByThem = ctx.seatDiscards && ctx.seatDiscards[i] && ctx.seatDiscards[i].includes(tile);
+    if (discardedByThem) return;
+    risk += meldDanger(info.meldCount) * valueWeight(info.flowerCount);
+  });
+  return risk;
 }
 
 /** 別家棄過的牌集合（供防守使用） */

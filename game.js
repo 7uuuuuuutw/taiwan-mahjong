@@ -783,12 +783,15 @@ class GameEngine {
         return this.doAddKong(seat, actions.addKongs[0]);
       }
       const ctx = {
+        mySeat: seat,
         seatDiscards: this.seats.map(s => s.discards),
         // 自己的面子已經透過 aiChooseDiscard 的 melds 參數算過一次，這裡
         // 只補「別人的」面子，不然自己面子的牌會被算兩次，導致
         // visibleCounts 誤判成「看到的比實際多」，剩餘張數反而低估。
         // 別家暗槓看不到牌面，也不算進「已知看得到」的統計。
         allMelds: this.seats.map((s, i) => i === seat ? [] : s.melds.filter(m => !(m.type === 'kong' && m.concealed))),
+        // 防守用的聽牌危險度：只給「別人」的面子數／花數（自己不算風險）
+        dangerInfo: this.seats.map((s, i) => i === seat ? null : { meldCount: s.melds.length, flowerCount: s.flowers.length }),
         style: p.aiStyle, kuikaeForbidden: p.kuikaeForbidden || [],
       };
       let discardTile = aiChooseDiscard(p.hand, p.melds, this.aiLevel, ctx);
