@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#12784a"/>
+      <stop offset="70%" stop-color="#0a5230"/>
+      <stop offset="100%" stop-color="#052a17"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff3c4"/>
+      <stop offset="45%" stop-color="#e8c86a"/>
+      <stop offset="100%" stop-color="#b8860b"/>
+    </linearGradient>
+    <linearGradient id="tileFace" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fffef9"/>
+      <stop offset="55%" stop-color="#f9f5ea"/>
+      <stop offset="100%" stop-color="#f0ebda"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- 雙線裱框，呼應遊戲介面的邊框設計 -->
+  <rect x="28" y="28" width="1144" height="574" rx="18" fill="none" stroke="rgba(232,200,106,.28)" stroke-width="2"/>
+
+  <!-- 三張斜置麻將牌裝飾（右側） -->
+  <g transform="translate(870,190) rotate(-8)">
+    <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
+    <text x="64" y="78" font-family="Georgia, 'Noto Serif TC', serif" font-size="60" font-weight="900" fill="#1e7a45" text-anchor="middle">發</text>
+  </g>
+  <g transform="translate(960,215) rotate(6)">
+    <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
+    <text x="64" y="80" font-family="Georgia, 'Noto Serif TC', serif" font-size="58" font-weight="900" fill="#c0392b" text-anchor="middle">中</text>
+  </g>
+  <g transform="translate(915,290) rotate(-2)">
+    <rect x="0" y="0" width="128" height="172" rx="12" fill="url(#tileFace)" stroke="#cec8b1" stroke-width="2"/>
+    <text x="64" y="105" font-family="Georgia, serif" font-size="52" font-weight="900" fill="#1f5fa8" text-anchor="middle">8</text>
+    <text x="64" y="60" font-family="'Noto Serif TC', serif" font-size="34" font-weight="900" fill="#1f5fa8" text-anchor="middle">萬</text>
+  </g>
+
+  <!-- 主標題 -->
+  <text x="90" y="270" font-family="'Noto Serif TC', Georgia, serif" font-size="108" font-weight="900" fill="url(#gold)" letter-spacing="6">台灣麻將</text>
+  <rect x="94" y="300" width="360" height="4" fill="url(#gold)" opacity=".8"/>
+  <text x="90" y="365" font-family="'Noto Serif TC', Georgia, serif" font-size="40" font-weight="700" fill="#e8c86a" letter-spacing="3">十六張 · 連線對戰</text>
+
+  <text x="90" y="440" font-family="'PingFang TC','Microsoft JhengHei',sans-serif" font-size="30" fill="#cfe6d8">P2P 連線 · 電腦補位 · 免安裝，開房即玩</text>
+
+  <!-- CTA -->
+  <rect x="90" y="480" width="300" height="70" rx="14" fill="url(#gold)"/>
+  <text x="240" y="525" font-family="'PingFang TC','Microsoft JhengHei',sans-serif" font-size="30" font-weight="700" fill="#4a3800" text-anchor="middle">立即開房遊玩</text>
+
+  <text x="90" y="590" font-family="'PingFang TC','Microsoft JhengHei',sans-serif" font-size="22" fill="rgba(207,230,216,.6)">7uuuuuuutw.github.io/taiwan-mahjong</text>
+</svg>
