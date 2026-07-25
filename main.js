@@ -409,8 +409,10 @@ function wireHostHandlers() {
     lastSeenAt[peerId] = Date.now(); // 等待對方送 join(name)，先預設視為存活
   });
   net.on('clientLeft', ({ peerId }) => {
-    // 遊戲已經開始（不在等待室）：斷線只暫停該座位，等對方重連，不移出名單
-    if (engine && engine.phase !== 'idle' && engine.phase !== 'over') {
+    // 遊戲已經開始（不在等待室）：斷線只暫停該座位，等對方重連，不移出名單。
+    // 'over'（結算畫面）也算「遊戲已經開始」——結算畫面停留期間斷線一樣
+    // 要暫停等對方回來，不能因為手上沒有正在進行的回合就當作沒事發生。
+    if (engine && engine.phase !== 'idle') {
       const seat = seatByPeer(peerId);
       if (seat >= 0) { engine.pauseGame(seat); return; }
     }
@@ -423,9 +425,14 @@ function wireHostHandlers() {
   // 心跳：定時 ping 所有 client，超過門檻沒有任何回應（含遊戲內其他訊息）
   // 就視同斷線並暫停——PeerJS 的 close 事件在真實斷線時不一定會觸發，
   // 不能只靠它判斷。等待室房主轉移重新掛上時要先清掉舊的計時器。
+  // 注意：結算畫面（phase==='over'）也要繼續 ping，不能跳過——client 端的
+  // watchdog 是看「多久沒收到 host 訊息」判斷斷線，如果結算畫面停留較久
+  // 期間完全沒有 ping，client 會誤判成斷線並自己觸發重連，玩家會看到
+  // 「在結算畫面待久了自動斷線」，其實連線根本沒斷，只是 host 這邊自己
+  // 不出聲。
   clearInterval(heartbeatInterval);
   heartbeatInterval = setInterval(() => {
-    if (!engine || engine.phase === 'idle' || engine.phase === 'over') return;
+    if (!engine || engine.phase === 'idle') return;
     net.broadcast({ type: 'ping' });
     const now = Date.now();
     seatOwners.forEach(o => {

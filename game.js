@@ -82,7 +82,10 @@ class GameEngine {
    *  進行中的 AI 動作／索取回應改採輪詢（見 aiSelfAct、openClaimWindow），
    *  暫停期間不會執行、恢復後會自動接續，不會遺失。 */
   pauseGame(seat) {
-    if (this.phase === 'idle' || this.phase === 'over' || this.paused) return;
+    // 'over'（結算畫面）不排除：結算畫面停留期間斷線一樣要暫停等對方
+    // 回來，否則房主可能在對方沒發現的情況下按「下一局」，把斷線的人
+    // 晾在原地。
+    if (this.phase === 'idle' || this.paused) return;
     this.paused = true;
     this.pausedSeat = seat;
     if (this.seats[seat]) this.seats[seat].connected = false;
