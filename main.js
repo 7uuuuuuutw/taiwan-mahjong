@@ -476,6 +476,29 @@ function hostHandleClientMessage(peerId, msg) {
       net.sendTo(peerId, { type: 'view', view: engine.viewFor(seat) });
       return;
     }
+    // 手動重連（沒有帶 rejoinSeat，或跟現在的座位對不上）：遊戲已經開始，
+    // 且有一個目前斷線中的 client 座位，名字跟這次 join 完全相同，就直接
+    // 讓他接手——不要求一定要帶著原本那次連線留下的 rejoinSeat 記錄
+    // （換裝置、清過瀏覽器資料、無痕視窗都會遺失那個記錄，但只要記得
+    // 房號跟自己當初填的名字，一樣能接回去）。房號本來就只會分享給朋友，
+    // 座位名字在整個房間裡對所有人都是公開可見的，用「房號＋名字」當
+    // 重連憑證，換取更高的重連成功率——不是絕對安全（同房號的人理論上
+    // 能用同名字搶走斷線者的座位），但跟這個遊戲原本設計給熟人小圈子
+    // 用的定位一致，跟現有 rejoinSeat 機制（本身也只檢查座位號碼、不驗
+    // 身分）比起來，不算引入新的風險等級。
+    if (engine && engine.phase !== 'idle') {
+      const nameToMatch = (msg.name || '').trim();
+      const seat = seatOwners.findIndex((o, i) =>
+        o && o.kind === 'client' && engine.seats[i] &&
+        engine.seats[i].connected === false && engine.seats[i].name === nameToMatch);
+      if (nameToMatch && seat >= 0) {
+        seatOwners[seat].peerId = peerId;
+        if (engine.paused && engine.pausedSeat === seat) engine.resumeGame(seat);
+        else engine.seats[seat].connected = true;
+        net.sendTo(peerId, { type: 'view', view: engine.viewFor(seat) });
+        return;
+      }
+    }
     // rejoinSeat：等待室房主轉移後，原本的玩家重新連進來，優先還原原本
     // 坐的位置——那個位置若還是新房主暫記的「等你重連」佔位（peerId
     // 為 null）就直接接手；若已經被真正的連線佔走（少見的競爭情況）
@@ -1184,6 +1207,14 @@ function clientHandleHostMessage(msg) {
       saveSession();
       break;
     case 'view':
+      // mySeat 平常在既有重連流程（同一台裝置記得自己原本坐哪）裡本來就
+      // 已知，這裡直接用 view.you 覆蓋是安全的無害操作；但對「換裝置／
+      // 清過快取，靠房號＋名字手動重連」這種全新連線來說，mySeat 從頭
+      // 到尾都還沒被設過，不補上這行、畫面會停在等待室動不了。
+      mySeat = msg.view.you;
+      document.getElementById('host-controls').style.display = 'none';
+      show('game-screen');
+      saveSession();
       renderView(msg.view);
       break;
     case 'yourTurn':
