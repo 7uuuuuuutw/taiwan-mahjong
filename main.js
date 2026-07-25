@@ -1591,10 +1591,16 @@ function makeBackTile(pos, index = 0) {
 let hasDiscardedOnce = false; // 出牌提示只在本次連線的第一次打牌時出現
 function onClickHandTile(tile) {
   if (!currentActions || !currentActions.discard) return;
-  // 剛吃／碰完不能打出的牌（吃碰限制）
+  // 剛吃／碰完不能打出的牌（吃碰限制）——除非手上所有牌都被擋住（極端
+  // 情況，例如吃完只剩兩張一樣的孤張剛好都是限制牌），這時 game.js 的
+  // discard() 會讓步放行，這裡也要跟著放行，不然人類玩家會卡住點不了
+  // 任何一張牌，畫面上卻沒有真的斷線或出錯。
   if (lastView) {
-    const forbidden = (lastView.seats[mySeat] && lastView.seats[mySeat].kuikaeForbidden) || [];
-    if (forbidden.includes(tile)) { toast('剛吃／碰，這張不能打'); return; }
+    const me = lastView.seats[mySeat];
+    const forbidden = (me && me.kuikaeForbidden) || [];
+    const hand = (me && me.hand) || [];
+    const allBlocked = hand.length > 0 && hand.every(t => forbidden.includes(t));
+    if (forbidden.includes(tile) && !allBlocked) { toast('剛吃／碰，這張不能打'); return; }
   }
   // 出牌
   hasDiscardedOnce = true;

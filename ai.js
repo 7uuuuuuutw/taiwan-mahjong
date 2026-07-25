@@ -329,6 +329,7 @@ function aiReactToDiscard(hand, melds, tile, canActions, ctx, level = 'normal') 
       if (afterShanten <= beforeShanten + sp.shantenSlack) return { action: 'pong' };
     }
     if (canActions.chi && canActions.chiOptions && canActions.chiOptions.length) {
+      const beforeUkeire = ukeireCount(cleanHand, melds, visCounts);
       let bestCombo = null, bestShanten = Infinity, bestUkeire = -1;
       for (const combo of canActions.chiOptions) {
         const after = removeN(removeOne(cleanHand, combo[0]), combo[1], 1);
@@ -339,7 +340,14 @@ function aiReactToDiscard(hand, melds, tile, canActions, ctx, level = 'normal') 
           bestShanten = sh; bestUkeire = uk; bestCombo = combo;
         }
       }
-      if (bestCombo && bestShanten <= beforeShanten + sp.shantenSlack) return { action: 'chi', chi: bestCombo };
+      // 吃一定要真的有幫助：向聽數變好，或向聽數打平但進張變多——否則就是
+      // 拆掉手上現成的搭子/順子去吃一口毫無進展的牌（例如手上已有 6,7,8
+      // 完整一組，卻拆開 6,7 去吃別人的 5，湊出一口公開的 5,6,7，剩下的 8
+      // 變成孤張還得馬上打掉），平白洩漏手牌資訊、浪費一次出牌機會，卻
+      // 什麼都沒換到。向聽數真的變差（各風格的容忍度）仍然照舊允許，那是
+      // 刻意為了搶快/搶台數的取捨，跟這種「打平卻零收穫」的情況不一樣。
+      const noOpTie = bestShanten === beforeShanten && bestUkeire <= beforeUkeire;
+      if (bestCombo && !noOpTie && bestShanten <= beforeShanten + sp.shantenSlack) return { action: 'chi', chi: bestCombo };
     }
     return { action: 'pass' };
   }

@@ -416,8 +416,12 @@ class GameEngine {
     const p = this.seats[seat];
     const idx = p.hand.indexOf(tile);
     if (idx < 0) return;
-    // 吃碰限制：剛吃/碰完，這張是不能打的
-    if (p.kuikaeForbidden && p.kuikaeForbidden.includes(tile)) {
+    // 吃碰限制：剛吃/碰完，這張是不能打的——但如果手上「所有牌」都被這個
+    // 限制擋住（例如吃完面子後只剩兩張一樣的孤張，剛好都是限制牌），玩家
+    // 會無牌可打、遊戲卡死不動。這種極端情況下限制讓步、允許照打，總比
+    // 卡住整桌不能繼續好；正常情況（手上還有其他能打的牌）限制照樣生效。
+    if (p.kuikaeForbidden && p.kuikaeForbidden.includes(tile) &&
+        p.hand.some(t => !p.kuikaeForbidden.includes(t))) {
       this.emitState(`${p.name} 剛吃／碰，這張不能打`);
       return;
     }
