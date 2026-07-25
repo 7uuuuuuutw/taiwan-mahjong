@@ -900,8 +900,12 @@ class GameEngine {
 
   /* -------- 詐胡 --------
    * 亂按胡但牌未成：賠給每家「自己最接近胡牌」的點數；
-   * 付給莊家時再加莊家/連莊台（更包含莊家）。詐胡後換下一家坐莊。 */
-  falseHu(seat) {
+   * 付給莊家時再加莊家/連莊台（更包含莊家）。詐胡後換下一家坐莊。
+   * @param misTile 誤以為靠這張牌成牌——自摸誤按是剛摸到的那張（已經在
+   *   手牌裡），索取階段誤按是別家剛打出、還沒進手牌的那張；呼叫端要在
+   *   呼叫這個函式「之前」就把值準備好傳進來，因為函式內部一開始就會把
+   *   this.claimWindow／this.drawnTile 都清空。 */
+  falseHu(seat, misTile) {
     if (this.phase === 'over' || this.phase === 'dice' || this.phase === 'dice-rolled' || this.phase === 'dealing') return;
     clearTimeout(this.claimTimer);
     this.clearTurnTimer();
@@ -929,8 +933,9 @@ class GameEngine {
     const guoShuiInfo = p.guoShui ? { tile: p.guoShuiTile, from: p.guoShuiFrom } : null;
     this.emit('handOver', {
       result: 'falseHu', offender: seat, estTai, payments, guoShui: guoShuiInfo,
-      // 亮出詐胡者的牌，讓大家能確認他牌真的沒成
-      hand: p.hand.slice(), melds: p.melds, flowers: p.flowers,
+      // 亮出詐胡者的牌，讓大家能確認他牌真的沒成；misTile 額外標出他
+      // 誤以為靠哪張牌成牌（可能為 null，例如過水詐胡不是靠算錯牌型）
+      hand: p.hand.slice(), melds: p.melds, flowers: p.flowers, misTile: misTile || null,
       scores: this.seats.map(s => s.score),
       dealerWin: false,
       roundEnding: this.willCompleteFullRound(false),
@@ -984,11 +989,12 @@ class GameEngine {
         // 大明槓（吃別人棄牌湊成的槓）補的牌不能自摸；暗槓與加槓都可以
         if (this.blockTsumoThisDraw) { this.emitState(`${p.name} 明槓補牌，此張不能自摸`); return; }
         // 過水中不提示、不攔下——刻意讓玩家自己記得，仍宣告就當詐胡處理
-        if (p.guoShui) return this.falseHu(seat);
+        if (p.guoShui) return this.falseHu(seat, this.drawnTile);
         this.clearTurnTimer();
         return this.declareWin(seat, this.drawnTile || p.hand[p.hand.length - 1], true);
       }
-      return this.falseHu(seat);
+      // 自摸誤按：他以為靠剛摸到的這張成牌，實際上沒有
+      return this.falseHu(seat, this.drawnTile || p.hand[p.hand.length - 1]);
     }
     // 索取階段（別人打牌）：這才是真正「面對一張牌決定要不要胡」的時刻
     if (this.phase === 'claim' && this.claimWindow) {
@@ -996,7 +1002,8 @@ class GameEngine {
       if (ent && ent.hu) return this.submitClaim(seat, { action: 'hu' });
       // ent.hu 在過水中本來就不會被標記（見 openClaimWindow），跟真的沒
       // 成牌一樣直接視為詐胡，不額外提示「過水中不能胡」
-      return this.falseHu(seat);
+      // 索取誤按：他以為靠這張別人剛打出的牌成牌，實際上沒有
+      return this.falseHu(seat, this.claimWindow.tile);
     }
     // 其他時機（不是你的回合、也沒有正在等你決定的牌）：
     // 例如反應窗口已過、輪到別家——此時按胡鈕不處罰，只提示，

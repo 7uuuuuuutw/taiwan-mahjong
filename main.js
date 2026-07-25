@@ -1922,17 +1922,26 @@ function renderHandOverModal(payload) {
     Sound.draw_game();
     const payRows = payload.payments.map(pm =>
       `<li>賠 ${escapeHtml(seatName(pm.to))} <b>${pm.value}</b> 籌碼</li>`).join('');
-    // 亮出詐胡者的牌，讓大家能親眼確認牌真的沒成
+    // 亮出詐胡者的牌，讓大家能親眼確認牌真的沒成；misTile 是他誤以為靠哪
+    // 張牌成牌——自摸誤按時那張已經在手牌裡，用 highlightTile 標出來就好；
+    // 索取誤按時那張是別人剛打出、還沒進他手牌的牌，額外用「＋」補一張
+    // （比照真的胡牌時「牌＋胡牌那張」的排版，讓人一眼看出是哪張牌害的）。
+    const misTile = payload.misTile || null;
+    const misInHand = !!(misTile && payload.hand && payload.hand.includes(misTile));
     const offenderMeldTiles = (payload.melds || []).flatMap(m => m.tiles);
-    const offenderReveal = payload.hand
-      ? `<div class="reveal-row">${tilesRowHTML(payload.hand)}${offenderMeldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(offenderMeldTiles)}` : ''}</div>`
+    const misTileSep = (misTile && !misInHand)
+      ? `<span class="reveal-sep">＋</span>${tilesRowHTML([misTile], misTile)}`
       : '';
+    const offenderReveal = payload.hand
+      ? `<div class="reveal-row">${tilesRowHTML(payload.hand, misInHand ? misTile : null)}${offenderMeldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(offenderMeldTiles)}` : ''}${misTileSep}</div>`
+      : '';
+    const misTileNote = misTile ? `誤以為靠 <b>${escapeHtml(tileName(misTile))}</b> 這張成牌，其實沒有。` : '';
     // 過水中仍宣告胡：牌其實已經成了，只是被過水擋下——跟真的沒成牌的
     // 詐胡文案不同，並亮出當初放棄的那張牌／來源讓大家核對這次判定。
     const gs = payload.guoShui;
     const desc = gs
       ? `過水中仍宣告胡牌，依規定算詐胡：${escapeHtml(seatName(payload.offender))} 這輪已經放棄過${gs.from === payload.offender ? '自己摸到的' : ('　' + escapeHtml(seatName(gs.from)) + ' 打出的')}這張牌，打出一張牌前不得再胡。`
-      : '牌未成卻宣告胡牌。';
+      : `牌未成卻宣告胡牌。${misTileNote}`;
     const guoShuiReveal = (gs && gs.tile) ? `<div class="reveal-row">${tilesRowHTML([gs.tile], gs.tile)}</div>` : '';
     body.innerHTML = roundBanner + `
       <h2>💥 ${escapeHtml(seatName(payload.offender))} 詐胡！</h2>
