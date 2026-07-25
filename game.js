@@ -136,7 +136,13 @@ class GameEngine {
     const p = this.seats[seat];
     const pool = p.hand.filter(t => !isFlower(t));
     if (pool.length === 0) return;
-    const tile = pool[Math.floor(Math.random() * pool.length)];
+    // 逾時隨機打：跟其他打牌路徑一樣要避開吃碰限制的牌，不然隨機挑到剛好
+    // 是禁打牌時，discard() 會直接拒絕、這次逾時等於完全沒打成，卡住不動
+    // 也沒有重新倒數——真的所有牌都被擋住（極端情況）才退回整包隨機挑。
+    const forbidden = p.kuikaeForbidden || [];
+    const allowedPool = forbidden.length ? pool.filter(t => !forbidden.includes(t)) : pool;
+    const finalPool = allowedPool.length ? allowedPool : pool;
+    const tile = finalPool[Math.floor(Math.random() * finalPool.length)];
     this.discard(seat, tile);
   }
 
