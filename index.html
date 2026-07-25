@@ -30,8 +30,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=122 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=122">
+  <!-- v= 版本號：每次改版把下面所有 v=123 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=123">
 </head>
 <body>
 
@@ -275,15 +275,28 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- 重連全部失敗時的手動重試遮罩：不直接判死刑重新整理，留給玩家自己
+       決定要不要再試一次（可能只是網路還在恢復中，多等一下就通了） -->
+  <div id="reconnect-fail-overlay" class="pause-overlay" style="display:none">
+    <div class="pause-box">
+      <div class="pause-icon">📡</div>
+      <p id="reconnect-fail-msg">重新連線失敗，可能是網路還在恢復中</p>
+      <div class="reconnect-fail-actions">
+        <button id="btn-reconnect-retry" class="pause-btn">重試</button>
+        <button id="btn-reconnect-giveup" class="pause-btn pause-btn-secondary">離開房間</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=122"></script>
-  <script src="tiles.js?v=122"></script>
-  <script src="sound.js?v=122"></script>
-  <script src="ai.js?v=122"></script>
-  <script src="game.js?v=122"></script>
-  <script src="network.js?v=122"></script>
-  <script src="main.js?v=122"></script>
+  <script src="mahjong.js?v=123"></script>
+  <script src="tiles.js?v=123"></script>
+  <script src="sound.js?v=123"></script>
+  <script src="ai.js?v=123"></script>
+  <script src="game.js?v=123"></script>
+  <script src="network.js?v=123"></script>
+  <script src="main.js?v=123"></script>
 </body>
 </html>

@@ -34,11 +34,17 @@ let lobbyPlayers = [];      // host 專用：等待室名單
  * 超過門檻沒收到任何回應（含遊戲內其他訊息）就視同斷線。 */
 const HEARTBEAT_INTERVAL_MS = 4000;
 const HEARTBEAT_TIMEOUT_MS = 12000;
+// 重連總預算：10 次 × 每次最多 16 秒逾時 + 1.5 秒間隔，最長可以耐心等
+// 將近 3 分鐘，讓「換 Wi-Fi、路由器重開機」這種需要一段時間才恢復的
+// 網路問題也有機會撐到重新接上，不會等不到一分半就直接放棄。
+const RECONNECT_MAX_ATTEMPTS = 10;
+const RECONNECT_RETRY_DELAY_MS = 1500;
 let heartbeatInterval = null;   // host 專用：定時 ping 各 client、檢查是否逾時
 let lastSeenAt = {};            // host 專用：peerId → 最後收到訊息的時間
 let lastHostMsgAt = 0;          // client 專用：最後收到 host 訊息的時間
 let clientWatchdog = null;      // client 專用：定時檢查 host 是否已讀不回
 let reconnectInFlight = false;  // client 專用：避免重連流程被重複觸發
+let reconnectExhausted = false; // client 專用：重試預算用完、等玩家手動決定要不要再試
 
 /* ---------- 重新整理後自動回到房間（client 專用） ----------
  * 只存最基本的「房號＋座位＋名字」到 localStorage，重新整理（等於整個
@@ -1023,12 +1029,14 @@ function onJoinRoom() {
 /** 定時檢查是否太久沒收到 host 的任何訊息（含 ping）——跟 host 端的心跳
  *  對稱，同樣是因為 PeerJS 的 close 事件不一定會在真實斷線時觸發，不能
  *  只靠它偵測。只在牌局畫面時檢查，且用 reconnectInFlight 避免跟
- *  onHostLeft（實際 close 事件）重複觸發重連。 */
+ *  onHostLeft（實際 close 事件）重複觸發重連；reconnectExhausted 則是
+ *  避免重試預算用完、跳出手動重試遮罩後，這裡又立刻因為 lastHostMsgAt
+ *  還是很舊而自動觸發下一輪重連，蓋掉玩家還沒來得及看到的重試按鈕。 */
 function startClientWatchdog() {
   if (clientWatchdog) return;
   lastHostMsgAt = Date.now();
   clientWatchdog = setInterval(() => {
-    if (reconnectInFlight) return;
+    if (reconnectInFlight || reconnectExhausted) return;
     const activeScreen = document.querySelector('.screen.active');
     if (!activeScreen || activeScreen.id !== 'game-screen') return;
     saveSession(); // 持續刷新「上次在哪個房間/座位」的時間戳，牌局中重新整理才接得回去
@@ -1047,7 +1055,10 @@ function startClientWatchdog() {
  *  都用同一份最後收到的名單、同一條規則各自算，理論上會選出同一個人，
  *  不需要額外協商。 */
 function onHostLeft() {
-  if (reconnectInFlight) return; // watchdog 可能已經先觸發重連，避免重複
+  // watchdog 可能已經先觸發重連，避免重複；reconnectExhausted 則是重試
+  // 預算用完、正等玩家自己決定要不要按重試，這時不能再被 close 事件
+  // 搶著自動重新觸發一輪，蓋掉手動重試遮罩。
+  if (reconnectInFlight || reconnectExhausted) return;
   const activeScreen = document.querySelector('.screen.active');
   // 遊戲進行中：無法分辨「房主真的離線」還是「自己網路剛好斷了一下」，
   // 兩者從 client 角度看起來一樣（連線被關閉）——一律當作後者處理，
@@ -1121,16 +1132,34 @@ function rejoinAfterMigration(roomCode) {
       saveSession();
       toast('已重新連上房間');
     }, () => {
-      if (attemptsLeft > 0) setTimeout(() => tryJoin(attemptsLeft - 1), 1500);
-      else {
-        reconnectInFlight = false;
-        clearSession(); // 房間真的回不去了，別再讓下次重新整理又白試一次
-        toast('重新連線失敗，房間已結束');
-        setTimeout(() => location.reload(), 2500);
-      }
+      if (attemptsLeft > 0) setTimeout(() => tryJoin(attemptsLeft - 1), RECONNECT_RETRY_DELAY_MS);
+      else showReconnectFailOverlay(roomCode);
     }, { rejoinSeat: myOldSeat });
   };
-  tryJoin(6);
+  tryJoin(RECONNECT_MAX_ATTEMPTS);
+}
+
+/** 重試預算用完：不直接判房間結束、清 session、強制重新整理——很多時候
+ *  只是網路還在恢復中（例如 Wi-Fi 正在重新握手、路由器還在重開機），
+ *  留一個「重試」按鈕讓玩家自己決定要不要再等一下再試，比被迫從頭手動
+ *  重新加入更有機會把連線救回來；真的不想等了也可以直接離開房間。 */
+function showReconnectFailOverlay(roomCode) {
+  reconnectInFlight = false;
+  reconnectExhausted = true;
+  const overlay = document.getElementById('reconnect-fail-overlay');
+  document.getElementById('btn-reconnect-retry').onclick = () => {
+    overlay.style.display = 'none';
+    reconnectExhausted = false;
+    reconnectInFlight = true;
+    toast('正在重新嘗試連線…');
+    rejoinAfterMigration(roomCode);
+  };
+  document.getElementById('btn-reconnect-giveup').onclick = () => {
+    overlay.style.display = 'none';
+    clearSession();
+    location.reload();
+  };
+  overlay.style.display = 'flex';
 }
 
 function clientHandleHostMessage(msg) {

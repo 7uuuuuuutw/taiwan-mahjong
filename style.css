@@ -715,7 +715,16 @@ input[type=text] {
 }
 .pause-icon { font-size: 2.4rem; margin-bottom: 10px; animation: pausePulse 1.4s ease-in-out infinite; }
 @keyframes pausePulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
-#pause-msg { color: #f2e9d0; font-size: 1.05rem; margin: 0; }
+#pause-msg, #reconnect-fail-msg { color: #f2e9d0; font-size: 1.05rem; margin: 0 0 16px; }
+.reconnect-fail-actions { display: flex; gap: 10px; justify-content: center; }
+.pause-btn {
+  padding: 10px 20px; font-size: .95rem; font-weight: 800;
+  border: none; border-radius: 10px; cursor: pointer; color: #fff;
+  background: var(--gold, #c9a227); box-shadow: 0 3px 0 rgba(0,0,0,.3);
+  transition: transform .08s; touch-action: manipulation;
+}
+.pause-btn:active { transform: translateY(2px); box-shadow: none; }
+.pause-btn-secondary { background: #555; }
 
 /* ---------- 結算彈窗 ---------- */
 .modal {
