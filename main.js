@@ -1446,7 +1446,10 @@ function renderSeat(s, pos, seat, view) {
       }
     } else {
       for (const t of m.tiles) g.appendChild(makeTile(t, false));
-      if (m.type === 'kong' && m.concealed) g.classList.add('concealed-kong');
+      // 暗槓兩端蓋牌背只是要讓「別人」看不出實際牌面；自己看自己的暗槓
+      // 本來就知道是哪四張，兩端還蓋著牌背反而顯得莫名其妙，只在看別人
+      // 座位時才加這個樣式。
+      if (m.type === 'kong' && m.concealed && seat !== view.you) g.classList.add('concealed-kong');
     }
     meldEl.appendChild(g);
   }
