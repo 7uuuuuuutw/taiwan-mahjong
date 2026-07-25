@@ -14,13 +14,23 @@ const ROOM_PREFIX = 'twmj16-'; // 避免與其他 PeerJS 使用者的房號撞�
  * 回報的真正常見成因，不一定是房號打錯。這裡加一個免費公用 TURN
  * 伺服器（OpenRelay，社群常用的免費方案）當最後備援：能直連還是優先
  * 直連，只有直連真的不通時才會繞經這台中繼伺服器轉發加密過的連線
- * 資料。 */
+ * 資料。
+ *
+ * 額外加了 turns:（TURN over TLS，走 443）：前面 turn:...?transport=tcp
+ * 雖然也走 443 連接埠，但底層仍是「看起來像 TCP 卻不是真的 HTTPS」的
+ * 流量，遇到會做深度封包檢測的嚴格防火牆（部分公司/校園網路）還是可能
+ * 被擋下來直接判定逾時；turns: 是包一層真正的 TLS 交握，流量特徵跟
+ * 正常瀏覽 HTTPS 網站沒有差別，能穿透的環境更多，當最後一道備援。
+ * 另外多列一台 Google 的 STUN 伺服器，避免單一 STUN 服務忙碌/連不上時
+ * 完全沒有備援。 */
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
 };
 
