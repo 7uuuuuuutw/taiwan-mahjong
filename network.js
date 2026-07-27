@@ -107,36 +107,56 @@ class NetworkManager {
 
   /* ---------- 加入房間（client） ----------
    * joinExtra：合併進 join 訊息的額外欄位，房主轉移後重新連線時用來
-   * 帶上「我原本坐哪一位」（rejoinSeat），讓新房主能把座位還原。 */
+   * 帶上「我原本坐哪一位」（rejoinSeat），讓新房主能把座位還原。
+   *
+   * 分兩階段嘗試：
+   *  1) 正常模式——瀏覽器會依序試直連／STUN／TURN，多數情況這樣就夠了。
+   *  2) 若第一階段逾時，改用 iceTransportPolicy:'relay' 強制只走 TURN
+   *     中繼，跳過直連／STUN 候選人。這是專門對付「路由器的客戶端隔離
+   *     （同一個 Wi-Fi 底下裝置互相看不到）」或某些嚴格防火牆的情況：
+   *     這類環境會讓直連候選人乾等沒有回應、拖到逾時，卻不會擋掉「主動
+   *     連到外部 TURN 伺服器」這件事——強制只走中繼可以跳過那段注定失敗
+   *     的等待，直接用中繼把連線接通。 */
   join(roomCode, name, onReady, onError, joinExtra) {
     this.isHost = false;
     this.myName = name;
     this.roomCode = roomCode.trim().toUpperCase();
-    this.peer = new Peer({ debug: 1, config: ICE_SERVERS });
 
-    // 逾時保護要包住「連上 PeerJS 訊號伺服器」到「跟房主的資料連線真的
-    // 打開」全程，從呼叫當下就開始算，不能只包在 peer.on('open') 裡面
-    // ——舊版逾時是巢狀寫在 peer.on('open') 內部，若連訊號伺服器本身都
-    // 連不上（peer.on('open') 永遠不觸發，這種卡住的狀況也不一定會觸發
-    // error），這次嘗試就會整個卡死不動，外層 rejoinAfterMigration 的
-    // 重試迴圈永遠等不到失敗通知去換下一次嘗試，看起來就是「重連卡住、
-    // 有時候就是連不回去」。
-    let settled = false;
-    const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); fn && fn(arg); };
-    const timer = setTimeout(() => finish(onError, new Error('連線逾時——請確認房號是否正確；若房號沒錯，可能是雙方網路環境限制了直接連線，可以換個網路（例如都用同一個 Wi-Fi）再試一次')), 16000);
+    const PHASE1_TIMEOUT_MS = 8000;
+    const PHASE2_TIMEOUT_MS = 9000;
 
-    this.peer.on('open', () => {
-      const conn = this.peer.connect(ROOM_PREFIX + this.roomCode, { reliable: true });
-      this.hostConn = conn;
-      conn.on('open', () => {
-        conn.send({ type: 'join', name, ...(joinExtra || {}) });
-        finish(onReady);
+    const attempt = (config, timeoutMs, onFail) => {
+      let settled = false;
+      this.peer = new Peer({ debug: 1, config });
+      const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); fn && fn(arg); };
+      const timer = setTimeout(() => finish(onFail, null), timeoutMs);
+
+      this.peer.on('open', () => {
+        const conn = this.peer.connect(ROOM_PREFIX + this.roomCode, { reliable: true });
+        this.hostConn = conn;
+        conn.on('open', () => {
+          conn.send({ type: 'join', name, ...(joinExtra || {}) });
+          finish(onReady);
+        });
+        conn.on('data', (msg) => this._fire('hostMessage', { msg }));
+        conn.on('close', () => this._fire('hostLeft', {}));
+        conn.on('error', (e) => finish(onFail, e));
       });
-      conn.on('data', (msg) => this._fire('hostMessage', { msg }));
-      conn.on('close', () => this._fire('hostLeft', {}));
-      conn.on('error', (e) => finish(onError, e));
+      this.peer.on('error', (err) => finish(onFail, err));
+    };
+
+    attempt(ICE_SERVERS, PHASE1_TIMEOUT_MS, (err) => {
+      // 房號打錯這類「明確」錯誤（peer-unavailable）直接回報，不用浪費
+      // 時間再試一次強制中繼——那不會讓不存在的房號變存在。
+      if (err && err.type && err.type !== 'network' && err.type !== 'server-error') {
+        onError && onError(err);
+        return;
+      }
+      try { this.peer && this.peer.destroy(); } catch (e) {}
+      attempt({ ...ICE_SERVERS, iceTransportPolicy: 'relay' }, PHASE2_TIMEOUT_MS, (err2) => {
+        onError && onError(err2 || new Error('連線逾時——請確認房號是否正確；若房號沒錯，可能是雙方網路環境限制了直接連線，可以換個網路（例如都用同一個 Wi-Fi）再試一次'));
+      });
     });
-    this.peer.on('error', (err) => finish(onError, err));
   }
 
   /** client: 傳給 host */
