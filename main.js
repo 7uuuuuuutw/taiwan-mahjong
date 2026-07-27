@@ -977,7 +977,10 @@ function hostEmit(event, payload) {
     });
   } else if (event === 'yourTurn') {
     const o = seatOwners[payload.seat];
-    if (o.kind === 'client') net.sendTo(o.peerId, { type: 'yourTurn', tile: payload.tile, actions: payload.actions, kong: payload.kong });
+    // timeLimit 原本沒有轉送給 client，導致真人 client 每次輪到自己打牌都
+    // 看不到倒數計時（host 自己因為是直接呼叫 showTurnActions(payload)、
+    // 拿到完整物件，所以沒受影響，只有 client 端會漏看）。
+    if (o.kind === 'client') net.sendTo(o.peerId, { type: 'yourTurn', tile: payload.tile, actions: payload.actions, kong: payload.kong, timeLimit: payload.timeLimit });
     else if (o.kind === 'host') showTurnActions(payload);
     // AI 由 engine 內部處理
   } else if (event === 'claimOffer') {
