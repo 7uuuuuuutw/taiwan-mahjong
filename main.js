@@ -1013,6 +1013,12 @@ function showPauseOverlay(payload) {
   const msg = document.getElementById('pause-msg');
   const name = (payload && payload.name) ? payload.name : '玩家';
   msg.textContent = `${name} 斷線中，等待重新連線…`;
+  // 斷線暫停期間讓大家看一下目前積分——lastView 是最近一次收到的牌局
+  // 畫面，裡面本來就帶著每家的即時分數，不用額外跟 host 要一份。
+  const scoresEl = document.getElementById('pause-scores');
+  if (scoresEl) {
+    scoresEl.innerHTML = lastView ? scoreTable(lastView.seats.map(s => s.score)) : '';
+  }
   overlay.style.display = 'flex';
 }
 function hidePauseOverlay() {

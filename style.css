@@ -716,6 +716,8 @@ input[type=text] {
 .pause-icon { font-size: 2.4rem; margin-bottom: 10px; animation: pausePulse 1.4s ease-in-out infinite; }
 @keyframes pausePulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 #pause-msg, #reconnect-fail-msg { color: #f2e9d0; font-size: 1.05rem; margin: 0 0 16px; }
+#pause-scores:not(:empty) { min-width: 220px; margin-top: 4px; }
+#pause-scores .score-table { margin-bottom: 0; }
 .reconnect-fail-actions { display: flex; gap: 10px; justify-content: center; }
 .pause-btn {
   padding: 10px 20px; font-size: .95rem; font-weight: 800;
