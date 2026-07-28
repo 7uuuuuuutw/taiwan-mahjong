@@ -997,4 +997,31 @@ input[type=text] {
     transform: scale(0.75);
     transform-origin: top left;
   }
+
+  /* 對家（上）與自己（下）的吃碰面子，平常是疊在手牌「下面」自成一整條
+     （直向堆疊：資訊列→手牌→面子），橫向遊玩時垂直空間本來就很擠，這
+     一整條會把中間 .table-middle（棄牌池所在的那一排）能分到的高度擠掉，
+     棄牌池被壓縮到快看不見。橫向模式寬度反而充裕，改成跟左右家一樣用
+     grid 排版：資訊列獨立一排在最上面，手牌與面子並排放在資訊列下面
+     （用寬度換高度），這樣不管吃碰幾組，都不會再侵佔 table-middle 的
+     垂直空間。 */
+  .seat-top, .seat-bottom {
+    display: grid;
+    grid-template-areas: "info info" "hand extras";
+    grid-template-columns: auto auto;
+    align-content: center; justify-content: center;
+    gap: 2px 10px;
+  }
+  .seat-top .seat-info, .seat-bottom .seat-info { grid-area: info; justify-self: center; }
+  .seat-top .seat-hand, .seat-bottom .seat-hand { grid-area: hand; }
+  .seat-top .seat-extras, .seat-bottom .seat-extras {
+    grid-area: extras; align-self: center; max-width: none;
+  }
+  /* 面子跟花牌本身改直向排列（一組面子一行），不然好幾組面子橫向掛在
+     一起會拉得很寬，反而跟旁邊的左右家搶版面；面子內部的牌還是橫排
+     （寬度夠用，不用像左右家那樣連單組面子裡的牌都要立起來）。 */
+  .seat-top .seat-extras .seat-melds, .seat-bottom .seat-extras .seat-melds,
+  .seat-top .seat-extras .seat-flowers, .seat-bottom .seat-extras .seat-flowers {
+    flex-direction: column;
+  }
 }
