@@ -526,32 +526,49 @@ class GameEngine {
   /* -------- 摸牌階段 -------- */
   doDrawPhase() {
     if (this.drawableCount() <= 0) return this.drawnGame();
-    const p = this.seats[this.turn];
-    let tile = this.drawFront();
-    // 補花（自摸到花 → 記錄，從牌尾補）
-    while (isFlower(tile)) {
-      if (this.trackFlowerDraw(this.turn, tile)) return; // 七搶一觸發，本局已結束
-      p.flowers.push(tile);
-      p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
-      if (this.drawableCount() <= 0) return this.drawnGame();
-      tile = this.drawBack();
-      this.lastDrawWasKong = true; // 補花後再胡 = 槓上開花性質（花槓上）
-    }
-    p.hand.push(tile);
-    p.hand = sortTiles(p.hand);
-    this.drawnTile = tile;
-    this.phase = 'act'; // 該玩家要行動（打牌/自摸/暗槓/加槓）
-    this.blockTsumoThisDraw = false; // 一般摸牌不受明槓限制
+    const seat = this.turn;
+    this.drawWithFlowerPause(seat, this.drawFront(), (tile) => {
+      const p = this.seats[seat];
+      p.hand.push(tile);
+      p.hand = sortTiles(p.hand);
+      this.drawnTile = tile;
+      this.phase = 'act'; // 該玩家要行動（打牌/自摸/暗槓/加槓）
+      this.blockTsumoThisDraw = false; // 一般摸牌不受明槓限制
 
-    const actions = this.selfActions(this.turn, tile);
-    this.tsumoAvailable = actions.tsumo; // 供過水判斷（棄自摸）
-    this.emitState(`${p.name} 摸牌`);
-    if (p.isAI) {
-      this.aiSelfAct(this.turn, tile, actions);
-    } else {
-      this.armTurnTimer(this.turn);
-      this.emit('yourTurn', { seat: this.turn, tile, actions, timeLimit: this.turnLimitMs / 1000 });
-    }
+      const actions = this.selfActions(seat, tile);
+      this.tsumoAvailable = actions.tsumo; // 供過水判斷（棄自摸）
+      this.emitState(`${p.name} 摸牌`);
+      if (p.isAI) {
+        this.aiSelfAct(seat, tile, actions);
+      } else {
+        this.armTurnTimer(seat);
+        this.emit('yourTurn', { seat, tile, actions, timeLimit: this.turnLimitMs / 1000 });
+      }
+    });
+  }
+
+  /** 摸牌可能連續摸到好幾張花：每摸到一張花，先停頓一下（跟開局補花演出
+   *  用一樣的間隔）讓玩家真的看得到自己摸到花了（畫面上會先顯示在花牌
+   *  區），才從牌尾補一張繼續摸，直到摸到非花才呼叫 onSettled(tile) 接續
+   *  原本該做的事（一般摸牌或槓後補牌，各自進入行動階段的細節不同，交給
+   *  呼叫端處理）。tile 是呼叫端已經摸好的第一張（一般摸牌從牌頭摸、
+   *  槓後補牌從牌尾摸，起手這張怎麼摸不一樣，之後補花一律從牌尾摸）。 */
+  drawWithFlowerPause(seat, tile, onSettled) {
+    if (this.dead || this.phase === 'over') return;
+    const p = this.seats[seat];
+    if (!isFlower(tile)) return onSettled(tile);
+    if (this.trackFlowerDraw(seat, tile)) return; // 七搶一觸發，本局已結束
+    p.flowers.push(tile);
+    p.flowers.sort((a, b) => tileOrder(a) - tileOrder(b));
+    this.lastDrawWasKong = true; // 補花後再胡 = 槓上開花性質（花槓上）
+    this.emitState(`${p.name} 補花`);
+    if (this.drawableCount() <= 0) { this.drawnGame(); return; }
+    const drawNext = () => {
+      if (this.dead || this.phase === 'over') return;
+      if (this.paused) { setTimeout(drawNext, PAUSE_POLL_MS); return; } // 暫停中：等恢復再繼續補
+      this.drawWithFlowerPause(seat, this.drawBack(), onSettled);
+    };
+    setTimeout(drawNext, 650);
   }
 
   /** 計算摸牌後自己可做的動作 */
@@ -673,29 +690,24 @@ class GameEngine {
     this.wallReserve += 1;
     // 槓後從牌尾補摸一張
     if (this.drawableCount() <= 0) return this.drawnGame();
-    const p = this.seats[seat];
-    let tile = this.drawBack();
-    while (isFlower(tile)) {
-      if (this.trackFlowerDraw(seat, tile)) return; // 七搶一觸發，本局已結束
-      p.flowers.push(tile);
-      if (this.drawableCount() <= 0) return this.drawnGame();
-      tile = this.drawBack();
-    }
-    p.hand.push(tile);
-    p.hand = sortTiles(p.hand);
-    this.drawnTile = tile;
-    this.lastDrawWasKong = true;
-    this.turn = seat;
-    this.phase = 'act';
-    // 槓上開花：暗槓／加槓補牌可以自摸；大明槓是用別人的棄牌湊成槓，
-    // 補牌完成手牌不算自己摸胡，不能自摸
-    this.blockTsumoThisDraw = !!fromDiscard;
-    const actions = this.selfActions(seat, tile);
-    if (fromDiscard) actions.tsumo = false; // 保險：即使 selfActions 算出能胡也不讓 AI 自動宣告
-    this.tsumoAvailable = actions.tsumo;
-    this.emitState(`${p.name} 槓`);
-    if (p.isAI) this.aiSelfAct(seat, tile, actions);
-    else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile, actions, kong: true, timeLimit: this.turnLimitMs / 1000 }); }
+    this.drawWithFlowerPause(seat, this.drawBack(), (tile) => {
+      const p = this.seats[seat];
+      p.hand.push(tile);
+      p.hand = sortTiles(p.hand);
+      this.drawnTile = tile;
+      this.lastDrawWasKong = true;
+      this.turn = seat;
+      this.phase = 'act';
+      // 槓上開花：暗槓／加槓補牌可以自摸；大明槓是用別人的棄牌湊成槓，
+      // 補牌完成手牌不算自己摸胡，不能自摸
+      this.blockTsumoThisDraw = !!fromDiscard;
+      const actions = this.selfActions(seat, tile);
+      if (fromDiscard) actions.tsumo = false; // 保險：即使 selfActions 算出能胡也不讓 AI 自動宣告
+      this.tsumoAvailable = actions.tsumo;
+      this.emitState(`${p.name} 槓`);
+      if (p.isAI) this.aiSelfAct(seat, tile, actions);
+      else { this.armTurnTimer(seat); this.emit('yourTurn', { seat, tile, actions, kong: true, timeLimit: this.turnLimitMs / 1000 }); }
+    });
   }
 
   /* -------- 開啟索取視窗（吃碰槓胡）-------- */
