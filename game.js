@@ -56,9 +56,11 @@ class GameEngine {
     this.drawnTile = null;
     this.paused = false;    // 是否因玩家斷線而暫停
     this.pausedSeat = null; // 暫停中斷線的座位
-    // 換牌（美麻）：預設關閉。meihuaTaiLimit 為 0 代表不限台，否則是台數上限。
+    // 換牌（美麻）：預設關閉。meihuaTaiFloor 為 0 代表不限台，否則是「起胡
+    // 門檻」——牌型台數要達到這個數字才能宣告胡牌，未達門檻視同詐胡，
+    // 不是台數上限（曾經誤把「3台」實作成封頂，跟起胡門檻正好相反）。
     this.meihua = !!opts.meihua;
-    this.meihuaTaiLimit = opts.meihuaTaiLimit || 0;
+    this.meihuaTaiFloor = opts.meihuaTaiLimit || 0;
     this.meihuaTimer = null;
     this.meihuaDirection = null; // 'up'=傳上家／'down'=傳下家，全局固定
     this.meihuaRound = 0;        // 已完成幾輪換牌
@@ -556,8 +558,9 @@ class GameEngine {
   selfActions(seat, tile) {
     const p = this.seats[seat];
     const a = { discard: true, tsumo: false, concealedKongs: [], addKongs: [] };
-    // 自摸（過水中、或明槓補牌時不得自摸）
-    if (!p.guoShui && !this.blockTsumoThisDraw && isWinningHand(p.hand, p.melds, this.winOpts)) a.tsumo = true;
+    // 自摸（過水中、或明槓補牌時不得自摸；換牌限台開啟時還要達到起胡門檻）
+    if (!p.guoShui && !this.blockTsumoThisDraw && isWinningHand(p.hand, p.melds, this.winOpts) &&
+        this.meetsMeihuaTaiFloor(seat, tile || p.hand[p.hand.length - 1], true, null)) a.tsumo = true;
     // 暗槓
     a.concealedKongs = findConcealedKongs(p.hand);
     // 加槓（手上有牌與已碰的刻子相同）
@@ -702,8 +705,9 @@ class GameEngine {
       const seat = (from + k) % 4;
       const p = this.seats[seat];
       const ent = {};
-      // 胡（放槍 / 搶槓）；過水中不得胡
-      if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds, this.winOpts)) ent.hu = true;
+      // 胡（放槍 / 搶槓）；過水中不得胡；換牌限台開啟時還要達到起胡門檻
+      if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds, this.winOpts) &&
+          this.meetsMeihuaTaiFloor(seat, tile, false, from)) ent.hu = true;
       if (!robbing) {
         if (canPong(p.hand, tile)) ent.pong = true;
         // 禁止「槓上家」：打牌者若是本座位的上家（本座位為打牌者的下家），不得明槓
@@ -999,15 +1003,16 @@ class GameEngine {
 
   /* -------- 胡牌結算 -------- */
 
-  /** 計算某家的胡牌台數並結算籌碼（單胡/多胡共用） */
-  computeWin(seat, winTile, selfDraw, loser) {
+  /** 建立 scoreHand() 需要的 ctx——computeWin() 跟「換牌限台門檻」的預先
+   *  試算（meetsMeihuaTaiFloor）共用，避免兩處各寫一份、算法不一致。
+   *  自摸時 winTile 已經在 p.hand 裡，要先扣掉才是正確的「胡牌前手牌」。 */
+  buildScoreCtx(seat, winTile, selfDraw, loser) {
     const p = this.seats[seat];
-    // 自摸時 winTile 已在手上，需扣除一張來當 winTile
     const handMinus = p.hand.slice();
     if (selfDraw) handMinus.splice(handMinus.indexOf(winTile), 1);
     const concealedWin = p.melds.every(m => m.concealed); // 無吃碰明槓
     const east = (this.eastSeat != null) ? this.eastSeat : this.dealer;
-    const ctx = {
+    return {
       hand: handMinus,
       winTile,
       melds: p.melds,
@@ -1026,6 +1031,23 @@ class GameEngine {
       diceBonus: this.diceBonus,
       allowLiGu: this.rules.ligu,
     };
+  }
+
+  /** 換牌（美麻）限台：這張牌胡下去，牌型台數有沒有達到起胡門檻（例如
+   *  「3台」＝至少 3 台才能宣告胡牌，未達門檻的話這張牌就不算能胡，跟
+   *  牌型沒成一樣要當詐胡處理）。沒開限台（meihuaTaiFloor 為 0）一律
+   *  通過。門檻只看牌型台數本身，不含骰子加成的倍數（那是運氣加成，
+   *  不該影響「這手牌夠不夠格胡」的門檻判斷）；八仙過海這種固定台數
+   *  的特殊胡法不受此限。 */
+  meetsMeihuaTaiFloor(seat, winTile, selfDraw, loser) {
+    if (!this.meihuaTaiFloor) return true;
+    const score = scoreHand(this.buildScoreCtx(seat, winTile, selfDraw, loser));
+    return score.baXian || score.total >= this.meihuaTaiFloor;
+  }
+
+  /** 計算某家的胡牌台數並結算籌碼（單胡/多胡共用） */
+  computeWin(seat, winTile, selfDraw, loser) {
+    const ctx = this.buildScoreCtx(seat, winTile, selfDraw, loser);
     const score = scoreHand(ctx);
     score.multiplier = (this.diceBonus && this.diceBonus.mult > 1) ? this.diceBonus.mult : 1;
     // 全紅「台數×3」：整手台數（含其餘所有台）一併乘3，再用來算籌碼
@@ -1033,17 +1055,15 @@ class GameEngine {
       score.taiMultiplier = this.diceBonus.taiMult;
       score.total *= this.diceBonus.taiMult;
     }
-    // 換牌（美麻）限制台數：封頂在所有加成（含骰子加成）都算完之後，
-    // 才是這個變體真正要限制的「最終台數」，八仙過海這種固定台數的
-    // 特殊胡法不受此限（下面 baXian 判斷式不會再動 score.total）。
-    if (this.meihuaTaiLimit && !score.baXian) score.total = Math.min(score.total, this.meihuaTaiLimit);
     // 八仙過海（集滿 8 張花）＝胡三家：不論實際是自摸還是胡別人放的牌，
     // 結算一律比照自摸的三家均付
     this.settle(seat, score, selfDraw || score.baXian, loser);
     return {
       seat, winTile, selfDraw, score,
-      hand: selfDraw ? handMinus : p.hand.slice(), // 亮牌用（不含胡牌張）
-      melds: p.melds, flowers: p.flowers,
+      // ctx.hand 已經是「扣掉胡牌張後的手牌」（selfDraw 時 buildScoreCtx
+      // 就扣過了），非自摸時本來就沒加進手牌，兩種情況這裡都不用再扣一次
+      hand: selfDraw ? ctx.hand : this.seats[seat].hand.slice(), // 亮牌用（不含胡牌張）
+      melds: ctx.melds, flowers: ctx.flowers,
     };
   }
 
@@ -1104,11 +1124,7 @@ class GameEngine {
     this.drawnTile = null;
     this.phase = 'over';
     const p = this.seats[seat];
-    // 換牌（美麻）限制台數：詐胡賠付依據的「最接近胡牌台數」估算也要
-    // 跟著封頂，不然限台規則只管到真的胡牌、詐胡賠付卻沒受限，不一致。
-    const estTai = this.meihuaTaiLimit
-      ? Math.min(this.estimateNearestWinTai(seat), this.meihuaTaiLimit)
-      : this.estimateNearestWinTai(seat);
+    const estTai = this.estimateNearestWinTai(seat);
     const dealerExtraTai = 1 + this.dealerStreak * 2;
     const baseValue = this.baseDi + estTai * this.baseTai;
     const payments = [];
@@ -1180,16 +1196,20 @@ class GameEngine {
     const p = this.seats[seat];
     // 自己回合（摸牌後）
     if (this.phase === 'act' && this.turn === seat) {
-      if (isWinningHand(p.hand, p.melds, this.winOpts)) {
+      const winTile = this.drawnTile || p.hand[p.hand.length - 1];
+      // 換牌限台開啟時，牌型沒達到起胡門檻就當作沒成牌（詐胡），跟牌型
+      // 真的沒湊成一樣處理
+      if (isWinningHand(p.hand, p.melds, this.winOpts) && this.meetsMeihuaTaiFloor(seat, winTile, true, null)) {
         // 大明槓（吃別人棄牌湊成的槓）補的牌不能自摸；暗槓與加槓都可以
         if (this.blockTsumoThisDraw) { this.emitState(`${p.name} 明槓補牌，此張不能自摸`); return; }
         // 過水中不提示、不攔下——刻意讓玩家自己記得，仍宣告就當詐胡處理
         if (p.guoShui) return this.falseHu(seat, this.drawnTile);
         this.clearTurnTimer();
-        return this.declareWin(seat, this.drawnTile || p.hand[p.hand.length - 1], true);
+        return this.declareWin(seat, winTile, true);
       }
-      // 自摸誤按：他以為靠剛摸到的這張成牌，實際上沒有
-      return this.falseHu(seat, this.drawnTile || p.hand[p.hand.length - 1]);
+      // 自摸誤按：他以為靠剛摸到的這張成牌，實際上沒有（或牌型有成，但
+      // 換牌限台開啟時沒達到門檻，一樣視為詐胡）
+      return this.falseHu(seat, winTile);
     }
     // 索取階段（別人打牌）：這才是真正「面對一張牌決定要不要胡」的時刻
     if (this.phase === 'claim' && this.claimWindow) {
