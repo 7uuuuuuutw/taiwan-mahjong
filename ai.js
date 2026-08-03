@@ -88,6 +88,27 @@ function aiChooseDiscard(hand, melds, level = 'normal', ctx = null) {
   return bestTile;
 }
 
+/** 換牌（美麻）：電腦選 3 張要換出去的牌。策略跟出牌選擇同一套邏輯——
+ *  貪婪地連續 3 次，每次都挑「拿掉這張、剩下的牌最好」的那張換出去
+ *  （等同連續三次假設要打這張牌時的評分，但這裡是真的要送出去，不是
+ *  打牌，所以不用管吃碰限制/安全牌/花色偏好那些跟「打出去」有關的
+ *  額外加分項，單純看拿掉後的手牌本身好不好）。 */
+function aiChooseMeihuaTiles(hand, melds) {
+  let pool = hand.filter(t => !isFlower(t));
+  const chosen = [];
+  for (let round = 0; round < 3 && pool.length; round++) {
+    let bestTile = pool[0], bestScore = -Infinity;
+    for (const t of new Set(pool)) {
+      const rest = removeOne(pool, t);
+      const score = handScore(rest, melds);
+      if (score > bestScore) { bestScore = score; bestTile = t; }
+    }
+    chosen.push(bestTile);
+    pool = removeOne(pool, bestTile);
+  }
+  return chosen;
+}
+
 /** 各家「聽牌危險度」粗估：只看公開資訊——已亮面子數。面子亮得越多，
  *  代表暗牌越少、離聽牌越近，愈危險。台灣麻將沒有立直宣告可以直接看，
  *  這是能拿到的最直接聽牌訊號（5 面子＋1 對子的牌型，亮滿 4 組面子

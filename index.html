@@ -30,8 +30,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
-  <!-- v= 版本號：每次改版把下面所有 v=135 一起加一，強制所有玩家載入新版 -->
-  <link rel="stylesheet" href="style.css?v=135">
+  <!-- v= 版本號：每次改版把下面所有 v=136 一起加一，強制所有玩家載入新版 -->
+  <link rel="stylesheet" href="style.css?v=136">
 </head>
 <body>
 
@@ -89,6 +89,7 @@
         <li>八仙過海（集滿8花）8台三家均付；七搶一也是8台</li>
         <li>集滿春夏秋冬或梅蘭竹菊其中一組各+1台，可與正花/八仙過海疊加</li>
         <li>牌尾保留16張、每開一槓+1；連莊 n 次多加 2n 台</li>
+        <li>換牌（美麻，房間設定可開啟）：補花後莊家選方向（傳上家／傳下家），全桌各選3張換牌，第1輪必換，第2、3輪由莊家決定</li>
       </ul>
       <button id="btn-rules-close" class="big-btn primary">關閉</button>
     </div>
@@ -168,6 +169,17 @@
               <select id="opt-leopard">
                 <option value="chip3">籌碼 ×3（預設）</option>
                 <option value="tai3">台數 ×3</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-row settings-checks">
+            <label class="check-label"><input type="checkbox" id="opt-meihua"> 換牌（美麻）</label>
+          </div>
+          <div class="settings-row">
+            <label>美麻限制台數
+              <select id="opt-meihua-tailimit">
+                <option value="0">不限台</option>
+                <option value="3">3台</option>
               </select>
             </label>
           </div>
@@ -292,12 +304,12 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- 遊戲程式 -->
-  <script src="mahjong.js?v=135"></script>
-  <script src="tiles.js?v=135"></script>
-  <script src="sound.js?v=135"></script>
-  <script src="ai.js?v=135"></script>
-  <script src="game.js?v=135"></script>
-  <script src="network.js?v=135"></script>
-  <script src="main.js?v=135"></script>
+  <script src="mahjong.js?v=136"></script>
+  <script src="tiles.js?v=136"></script>
+  <script src="sound.js?v=136"></script>
+  <script src="ai.js?v=136"></script>
+  <script src="game.js?v=136"></script>
+  <script src="network.js?v=136"></script>
+  <script src="main.js?v=136"></script>
 </body>
 </html>

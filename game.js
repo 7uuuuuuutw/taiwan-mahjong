@@ -14,6 +14,7 @@ const HU_GRACE_MS = 9000; // 有人可胡但不提示時的無聲反應窗口（
 const DICE_SETTLE_MS = 1250; // 擲骰翻滾動畫定格時間，超過後才開始發牌演出
 const AI_CLAIM_DELAY_MS = [650, 950]; // 真人打出的牌被電腦吃碰槓前的可見延遲區間
 const PAUSE_POLL_MS = 500; // 斷線暫停期間，各計時型動作改用此間隔輪詢是否已恢復
+const MEIHUA_MAX_ROUNDS = 3; // 換牌（美麻）最多換 3 輪
 
 class GameEngine {
   /**
@@ -53,6 +54,13 @@ class GameEngine {
     this.drawnTile = null;
     this.paused = false;    // 是否因玩家斷線而暫停
     this.pausedSeat = null; // 暫停中斷線的座位
+    // 換牌（美麻）：預設關閉。meihuaTaiLimit 為 0 代表不限台，否則是台數上限。
+    this.meihua = !!opts.meihua;
+    this.meihuaTaiLimit = opts.meihuaTaiLimit || 0;
+    this.meihuaTimer = null;
+    this.meihuaDirection = null; // 'up'=傳上家／'down'=傳下家，全局固定
+    this.meihuaRound = 0;        // 已完成幾輪換牌
+    this.meihuaSelections = {};  // 這一輪，座位 → 選出要換掉的 3 張牌
   }
 
   /** 銷毀：停掉所有計時器並靜音事件（回等待室時呼叫，避免舊局干擾新局） */
@@ -90,6 +98,7 @@ class GameEngine {
     this.pausedSeat = seat;
     if (this.seats[seat]) this.seats[seat].connected = false;
     clearTimeout(this.claimTimer);
+    clearTimeout(this.meihuaTimer);
     this.clearTurnTimer();
     this.emit('gamePaused', { seat, name: this.seats[seat] ? this.seats[seat].name : '' });
   }
@@ -129,6 +138,16 @@ class GameEngine {
       clearTimeout(this.claimTimer);
       this.claimTimer = setTimeout(() => this.forceResolveClaims(),
         anyVisibleHuman ? CLAIM_TIMEOUT_MS : HU_GRACE_MS);
+    } else if (this.phase === 'meihua-select') {
+      for (const p of this.seats) {
+        if (p.isAI || this.meihuaSelections[p.seat]) continue; // AI 的輪詢型 setTimeout 會自行接續
+        this.emit('meihuaSelectRequest', { seat: p.seat, timeLimit: this.turnLimitMs / 1000 });
+      }
+      this.armMeihuaTimer();
+    } else if (this.phase === 'meihua-direction' && !this.seats[this.dealer].isAI) {
+      this.emit('meihuaDirectionRequest', { seat: this.dealer });
+    } else if (this.phase === 'meihua-continue' && !this.seats[this.dealer].isAI) {
+      this.emit('meihuaContinueRequest', { seat: this.dealer });
     }
   }
   autoDiscard(seat) {
@@ -248,7 +267,9 @@ class GameEngine {
       this.lastDiscard = null;
       this.winner = null;
       this.emitState('開始新局');
-      this.beginDealerAct(); // 莊家開門時已拿第 17 張，直接行動、不再摸牌
+      // 換牌（美麻）：補完花、莊家打第一張牌之前，全桌先換牌
+      if (this.meihua) this.startMeihua();
+      else this.beginDealerAct(); // 莊家開門時已拿第 17 張，直接行動、不再摸牌
       return;
     }
     const seat = (this.dealer + k) % 4;
@@ -332,6 +353,152 @@ class GameEngine {
     this.emitState(`${robber.name} 七搶一！`);
   }
 
+  /* -------- 換牌（美麻）：補花後、莊家打第一張牌前，全桌先換牌 --------
+   * 流程：莊家先選方向（傳上家／傳下家，全局固定不能中途改）→ 第 1 輪
+   * 換牌一定會進行（全桌同時各選 3 張換出去）→ 換完問莊家要不要再換一輪
+   * （最多到第 3 輪，莊家選「不換」或到達第 3 輪就結束）→ 進入正常開局。 */
+
+  /** 開始換牌：先讓莊家選方向。 */
+  startMeihua() {
+    this.phase = 'meihua-direction';
+    this.meihuaDirection = null;
+    this.meihuaRound = 0;
+    const dealerP = this.seats[this.dealer];
+    this.emitState(`等待莊家 ${dealerP.name} 決定換牌方向`);
+    if (dealerP.isAI) {
+      setTimeout(() => {
+        if (this.dead || this.phase !== 'meihua-direction') return;
+        if (this.paused) return; // resumeGame 會依 phase 重新驅動，這裡直接放棄這次排程
+        this.chooseMeihuaDirection(this.dealer, Math.random() < 0.5 ? 'up' : 'down');
+      }, 900);
+    } else {
+      this.emit('meihuaDirectionRequest', { seat: this.dealer });
+    }
+  }
+
+  /** 莊家決定換牌方向：'up'＝傳上家、'down'＝傳下家，全局只問這一次。 */
+  chooseMeihuaDirection(seat, direction) {
+    if (this.phase !== 'meihua-direction' || seat !== this.dealer) return;
+    this.meihuaDirection = (direction === 'up') ? 'up' : 'down';
+    this.emitState(`${this.seats[this.dealer].name} 決定換牌：${this.meihuaDirection === 'up' ? '傳上家' : '傳下家'}`);
+    this.startMeihuaSelectRound();
+  }
+
+  /** 開始一輪換牌選牌：全桌同時各選 3 張要換出去的牌。 */
+  startMeihuaSelectRound() {
+    this.phase = 'meihua-select';
+    this.meihuaSelections = {};
+    this.emitState(`換牌第 ${this.meihuaRound + 1} 輪：請選出 3 張要換的牌`);
+    for (const p of this.seats) {
+      if (p.isAI) {
+        const tiles = aiChooseMeihuaTiles(p.hand, p.melds);
+        const seat = p.seat;
+        setTimeout(() => {
+          if (this.dead || this.phase !== 'meihua-select') return;
+          if (this.paused) return; // resumeGame 會依 phase 重新驅動，這裡直接放棄這次排程
+          this.submitMeihuaSelection(seat, tiles);
+        }, 500 + Math.random() * 500);
+      } else {
+        this.emit('meihuaSelectRequest', { seat: p.seat, timeLimit: this.turnLimitMs / 1000 });
+      }
+    }
+    this.armMeihuaTimer();
+  }
+
+  /** 換牌選牌逾時：真人還沒選的，自動隨機選 3 張（電腦一定準時送出，不會逾時）。 */
+  armMeihuaTimer() {
+    clearTimeout(this.meihuaTimer);
+    if (!this.turnLimitMs) return; // 不計時
+    this.meihuaTimer = setTimeout(() => {
+      if (this.dead || this.phase !== 'meihua-select') return;
+      if (this.paused) { this.armMeihuaTimer(); return; } // 暫停中：重新倒數，等恢復
+      for (const p of this.seats) {
+        if (this.meihuaSelections[p.seat]) continue;
+        const pick = p.hand.filter(t => !isFlower(t));
+        const tiles = [];
+        for (let i = 0; i < 3 && pick.length; i++) {
+          tiles.push(pick.splice(Math.floor(this.rng() * pick.length), 1)[0]);
+        }
+        this.meihuaSelections[p.seat] = tiles;
+      }
+      this.resolveMeihuaRound();
+    }, this.turnLimitMs);
+  }
+
+  /** 玩家提交這輪要換出去的 3 張牌；四家都送出後立即結算，不用等逾時。 */
+  submitMeihuaSelection(seat, tiles) {
+    if (this.phase !== 'meihua-select' || this.meihuaSelections[seat]) return;
+    const p = this.seats[seat];
+    if (!Array.isArray(tiles) || tiles.length !== 3) return;
+    // 驗證這 3 張真的都在手上（各自扣一張，避免同一張牌被拿來湊兩次）
+    const check = p.hand.slice();
+    for (const t of tiles) {
+      const idx = check.indexOf(t);
+      if (idx < 0) return; // 有牌不存在/數量對不上，整個提交無效
+      check.splice(idx, 1);
+    }
+    this.meihuaSelections[seat] = tiles;
+    if (Object.keys(this.meihuaSelections).length === 4) {
+      clearTimeout(this.meihuaTimer);
+      this.resolveMeihuaRound();
+    }
+  }
+
+  /** 結算這一輪換牌：依方向把每家選出的 3 張轉給對應座位，加進對方手牌。 */
+  resolveMeihuaRound() {
+    const dir = this.meihuaDirection;
+    const given = this.meihuaSelections;
+    // 先把每家選出的 3 張從手上移除（全部移除完再發，避免先發先扣互相干擾）
+    for (const p of this.seats) {
+      for (const t of (given[p.seat] || [])) {
+        const idx = p.hand.indexOf(t);
+        if (idx >= 0) p.hand.splice(idx, 1);
+      }
+    }
+    for (const p of this.seats) {
+      // 傳下家：自己收到「上家」傳來的；傳上家則反過來收到「下家」傳來的
+      const fromSeat = dir === 'down' ? (p.seat + 3) % 4 : (p.seat + 1) % 4;
+      p.hand.push(...(given[fromSeat] || []));
+      p.hand = sortTiles(p.hand);
+    }
+    this.meihuaRound++;
+    this.emitState(`換牌第 ${this.meihuaRound} 輪完成`);
+    if (this.meihuaRound >= MEIHUA_MAX_ROUNDS) this.finishMeihua();
+    else this.startMeihuaContinuePrompt();
+  }
+
+  /** 問莊家要不要再換一輪（第 1 輪一定會換，第 2、3 輪才需要莊家決定）。 */
+  startMeihuaContinuePrompt() {
+    this.phase = 'meihua-continue';
+    const dealerP = this.seats[this.dealer];
+    this.emitState(`等待莊家 ${dealerP.name} 決定是否再換一輪`);
+    if (dealerP.isAI) {
+      setTimeout(() => {
+        if (this.dead || this.phase !== 'meihua-continue') return;
+        if (this.paused) return;
+        // 簡單策略：向聽數還很差就繼續換，牌已經不錯就見好就收
+        const hand = dealerP.hand.filter(t => !isFlower(t));
+        const swap = estimateShanten(hand, dealerP.melds) > 2;
+        this.decideMeihuaContinue(this.dealer, swap);
+      }, 900);
+    } else {
+      this.emit('meihuaContinueRequest', { seat: this.dealer });
+    }
+  }
+
+  /** 莊家決定是否再換一輪。 */
+  decideMeihuaContinue(seat, swap) {
+    if (this.phase !== 'meihua-continue' || seat !== this.dealer) return;
+    if (swap) this.startMeihuaSelectRound();
+    else this.finishMeihua();
+  }
+
+  /** 換牌流程結束，進入正常開局（莊家打第一張牌）。 */
+  finishMeihua() {
+    clearTimeout(this.meihuaTimer);
+    this.beginDealerAct();
+  }
+
   /** 開局莊家行動：開門時已拿了第 17 張（補花也已在 flowerPhase 處理過），
    *  不再摸牌，直接進入打牌/自摸/暗槓的行動階段 */
   beginDealerAct() {
@@ -404,6 +571,10 @@ class GameEngine {
     }
     // 常駐胡牌鈕（按錯 = 詐胡）
     if (action.type === 'declareHu') return this.declareHuAttempt(seat);
+    // 換牌（美麻）三個動作
+    if (action.type === 'meihuaDirection') return this.chooseMeihuaDirection(seat, action.direction);
+    if (action.type === 'meihuaSelect') return this.submitMeihuaSelection(seat, action.tiles);
+    if (action.type === 'meihuaContinue') return this.decideMeihuaContinue(seat, !!action.swap);
 
     if (this.phase === 'act' && seat === this.turn) {
       this.clearTurnTimer();
@@ -856,6 +1027,10 @@ class GameEngine {
       score.taiMultiplier = this.diceBonus.taiMult;
       score.total *= this.diceBonus.taiMult;
     }
+    // 換牌（美麻）限制台數：封頂在所有加成（含骰子加成）都算完之後，
+    // 才是這個變體真正要限制的「最終台數」，八仙過海這種固定台數的
+    // 特殊胡法不受此限（下面 baXian 判斷式不會再動 score.total）。
+    if (this.meihuaTaiLimit && !score.baXian) score.total = Math.min(score.total, this.meihuaTaiLimit);
     // 八仙過海（集滿 8 張花）＝胡三家：不論實際是自摸還是胡別人放的牌，
     // 結算一律比照自摸的三家均付
     this.settle(seat, score, selfDraw || score.baXian, loser);
@@ -923,7 +1098,11 @@ class GameEngine {
     this.drawnTile = null;
     this.phase = 'over';
     const p = this.seats[seat];
-    const estTai = this.estimateNearestWinTai(seat);
+    // 換牌（美麻）限制台數：詐胡賠付依據的「最接近胡牌台數」估算也要
+    // 跟著封頂，不然限台規則只管到真的胡牌、詐胡賠付卻沒受限，不一致。
+    const estTai = this.meihuaTaiLimit
+      ? Math.min(this.estimateNearestWinTai(seat), this.meihuaTaiLimit)
+      : this.estimateNearestWinTai(seat);
     const dealerExtraTai = 1 + this.dealerStreak * 2;
     const baseValue = this.baseDi + estTai * this.baseTai;
     const payments = [];

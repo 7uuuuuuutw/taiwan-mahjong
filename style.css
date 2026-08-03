@@ -436,6 +436,12 @@ input[type=text] {
   filter: grayscale(.6) brightness(.6);
 }
 
+/* 換牌（美麻）選牌階段：已勾選要換出去的牌，往上抬一點＋金色外框提示 */
+.seat-bottom .seat-hand .tile.meihua-selected {
+  transform: translateY(-10px);
+  box-shadow: 0 0 0 3px var(--gold), 0 6px 10px rgba(0,0,0,.4);
+}
+
 /* 拖曳打牌 */
 .seat-bottom .seat-hand .tile.clickable { cursor: grab; touch-action: none; }
 .tile.dragging {

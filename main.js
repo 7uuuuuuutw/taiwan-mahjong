@@ -23,6 +23,10 @@ let lastView = null;        // 最近一次收到/產生的視圖
 let currentActions = null;  // 目前可行動作
 let currentClaim = null;    // 目前索取視窗
 let pendingChi = null;      // 吃的選擇暫存
+let meihuaSelecting = false;  // 換牌（美麻）選牌階段：是否正在選要換出去的牌
+let meihuaSelectedEls = [];   // 換牌（美麻）已勾選的手牌 DOM 元素（最多 3 個）——
+                               // 用元素而不是牌值追蹤，因為手牌可能有好幾張同名的牌
+                               // （例如兩張三萬），用牌值沒辦法分辨勾的是哪一張實體
 
 // host 專用：座位 → { kind:'host'|'client'|'ai', peerId }
 let seatOwners = [];
@@ -933,6 +937,8 @@ function onHostStart() {
   const optLigu = document.getElementById('opt-ligu').checked;
   const optDiceBonus = document.getElementById('opt-dicebonus').checked;
   const optLeopard = document.getElementById('opt-leopard').value;
+  const optMeihua = document.getElementById('opt-meihua').checked;
+  const optMeihuaTaiLimit = +document.getElementById('opt-meihua-tailimit').value;
   applyTileBack(optBack);
 
   // 組出 4 個座位（不足補 AI，給創意名字）
@@ -955,6 +961,7 @@ function onHostStart() {
     roundWind: 0, dealer: 0, dealerStreak: 0,
     baseDi: optDi, baseTai: optTai, turnLimitMs: optTimerSec * 1000,
     aiLevel: optAi, ligu: optLigu, diceBonus: optDiceBonus, leopardMode: optLeopard,
+    meihua: optMeihua, meihuaTaiLimit: optMeihuaTaiLimit,
   });
 
   // 通知所有 client 進入遊戲（含牌背顏色設定）
@@ -991,6 +998,18 @@ function hostEmit(event, payload) {
     const o = seatOwners[payload.seat];
     if (o.kind === 'client') net.sendTo(o.peerId, { type: 'rollDiceRequest' });
     else if (o.kind === 'host') showRollButton();
+  } else if (event === 'meihuaDirectionRequest') {
+    const o = seatOwners[payload.seat];
+    if (o.kind === 'client') net.sendTo(o.peerId, { type: 'meihuaDirectionRequest' });
+    else if (o.kind === 'host') showMeihuaDirectionPrompt();
+  } else if (event === 'meihuaSelectRequest') {
+    const o = seatOwners[payload.seat];
+    if (o.kind === 'client') net.sendTo(o.peerId, { type: 'meihuaSelectRequest', timeLimit: payload.timeLimit });
+    else if (o.kind === 'host') showMeihuaSelectPrompt(payload.timeLimit);
+  } else if (event === 'meihuaContinueRequest') {
+    const o = seatOwners[payload.seat];
+    if (o.kind === 'client') net.sendTo(o.peerId, { type: 'meihuaContinueRequest' });
+    else if (o.kind === 'host') showMeihuaContinuePrompt();
   } else if (event === 'handOver') {
     seatOwners.forEach(o => {
       if (o.kind === 'client') net.sendTo(o.peerId, { type: 'handOver', payload });
@@ -1248,6 +1267,15 @@ function clientHandleHostMessage(msg) {
     case 'rollDiceRequest':
       showRollButton();
       break;
+    case 'meihuaDirectionRequest':
+      showMeihuaDirectionPrompt();
+      break;
+    case 'meihuaSelectRequest':
+      showMeihuaSelectPrompt(msg.timeLimit);
+      break;
+    case 'meihuaContinueRequest':
+      showMeihuaContinuePrompt();
+      break;
     case 'backToLobby':
       clearSession(); // 回到等待室，不算牌局中，不用再自動重連
       document.getElementById('result-modal').style.display = 'none';
@@ -1269,6 +1297,77 @@ function showRollButton() {
   hint.textContent = '你是莊家，請擲骰開局 → ';
   bar.appendChild(hint);
   addActionBtn(bar, '🎲 擲骰子', 'win', () => sendAction({ type: 'rollDice' }));
+}
+
+/* ---------- 換牌（美麻） ---------- */
+
+/** 莊家選換牌方向（全局只問這一次）。 */
+function showMeihuaDirectionPrompt() {
+  const bar = document.getElementById('action-bar');
+  bar.innerHTML = '';
+  bar.style.display = 'flex';
+  const hint = document.createElement('span');
+  hint.className = 'action-hint';
+  hint.textContent = '你是莊家，請選擇換牌方向 → ';
+  bar.appendChild(hint);
+  addActionBtn(bar, '傳上家', 'chi', () => sendAction({ type: 'meihuaDirection', direction: 'up' }));
+  addActionBtn(bar, '傳下家', 'pong', () => sendAction({ type: 'meihuaDirection', direction: 'down' }));
+}
+
+/** 莊家決定要不要再換一輪（第 2、3 輪才會問，第 1 輪一定會換）。 */
+function showMeihuaContinuePrompt() {
+  const bar = document.getElementById('action-bar');
+  bar.innerHTML = '';
+  bar.style.display = 'flex';
+  const hint = document.createElement('span');
+  hint.className = 'action-hint';
+  hint.textContent = '你是莊家，要再換一輪嗎？ → ';
+  bar.appendChild(hint);
+  addActionBtn(bar, '再換一輪', 'chi', () => sendAction({ type: 'meihuaContinue', swap: true }));
+  addActionBtn(bar, '不用了', 'pass', () => sendAction({ type: 'meihuaContinue', swap: false }));
+}
+
+/** 進入換牌選牌階段：點選手牌切換勾選狀態（見 onMeihuaTileClick），
+ *  選滿 3 張後行動列會出現「確認換牌」按鈕。 */
+function showMeihuaSelectPrompt(timeLimit) {
+  meihuaSelecting = true;
+  meihuaSelectedEls = [];
+  currentActions = null; // 跟一般打牌互斥，避免手牌點擊誤觸發原本的打牌邏輯
+  if (timeLimit) startUiTimer(timeLimit); else stopUiTimer();
+  renderMeihuaSelectBar();
+}
+
+/** 換牌選牌階段的行動列：顯示目前已選張數，選滿 3 張才出現確認按鈕。 */
+function renderMeihuaSelectBar() {
+  const bar = document.getElementById('action-bar');
+  bar.innerHTML = '';
+  bar.style.display = 'flex';
+  const hint = document.createElement('span');
+  hint.className = 'action-hint';
+  hint.textContent = `換牌：點選 3 張要換出去的牌（已選 ${meihuaSelectedEls.length}/3）`;
+  bar.appendChild(hint);
+  if (meihuaSelectedEls.length === 3) {
+    addActionBtn(bar, '確認換牌', 'win', () => {
+      const tiles = meihuaSelectedEls.map(el => el.dataset.tile);
+      meihuaSelecting = false; meihuaSelectedEls = [];
+      sendAction({ type: 'meihuaSelect', tiles });
+    });
+  }
+}
+
+/** 換牌選牌階段點擊手牌：切換這張牌（DOM 元素本身，不是牌值——同名牌
+ *  可能有好幾張，用元素才分得出勾的是哪一張實體）的勾選狀態，最多 3 張。 */
+function onMeihuaTileClick(tile, el) {
+  const idx = meihuaSelectedEls.indexOf(el);
+  if (idx >= 0) {
+    meihuaSelectedEls.splice(idx, 1);
+    el.classList.remove('meihua-selected');
+  } else {
+    if (meihuaSelectedEls.length >= 3) { toast('最多只能選 3 張'); return; }
+    meihuaSelectedEls.push(el);
+    el.classList.add('meihua-selected');
+  }
+  renderMeihuaSelectBar();
 }
 
 /** 送出動作（host 直接呼叫 engine，client 透過網路）
@@ -1317,6 +1416,10 @@ function renderView(view) {
   // 或索取視窗已被他人解決）→ 收掉殘留的行動列與倒數
   if (currentActions && !(view.phase === 'act' && view.turn === you)) clearActions();
   if (currentClaim && view.phase !== 'claim') clearActions();
+  // 換牌（美麻）選牌狀態：換牌階段已經結束（不管是換完這一輪、還是整個
+  // 流程結束進入正常開局），殘留的選牌狀態要清掉，避免下一輪/下一局
+  // 選牌介面卡著上一輪選到一半的殘留勾選。
+  if (meihuaSelecting && view.phase !== 'meihua-select') { meihuaSelecting = false; meihuaSelectedEls = []; }
 
   // 資訊列
   const winds = ['東', '南', '西', '北'];
@@ -1665,7 +1768,7 @@ function isOverPlayZone(x, y) {
 /** 讓一張手牌可拖曳打出 */
 function attachDragDiscard(el, tile) {
   el.addEventListener('pointerdown', (e) => {
-    if (!currentActions || !currentActions.discard) return;
+    if (!meihuaSelecting && (!currentActions || !currentActions.discard)) return;
     e.preventDefault();
     const startX = e.clientX, startY = e.clientY;
     let moved = false, willPlay = false;
@@ -1705,6 +1808,14 @@ function attachDragDiscard(el, tile) {
         el.classList.remove('dragging', 'will-play');
         setTimeout(() => { el.style.transition = ''; }, 160);
       };
+
+      // 換牌（美麻）選牌階段：點/拖手牌是切換勾選，不是打牌，跟一般打牌
+      // 的邏輯（吃碰限制、送出 discard）完全無關，優先判斷、直接分流。
+      if (meihuaSelecting) {
+        bounceBack();
+        if (play) onMeihuaTileClick(tile, el);
+        return;
+      }
 
       if (play && forbidden.includes(tile)) {
         toast('剛吃／碰，這張不能打');
