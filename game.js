@@ -1045,15 +1045,21 @@ class GameEngine {
     };
   }
 
-  /** 換牌（美麻）限台：這張牌胡下去，牌型台數有沒有達到起胡門檻（例如
-   *  「3台」＝至少 3 台才能宣告胡牌，未達門檻的話這張牌就不算能胡，跟
-   *  牌型沒成一樣要當詐胡處理）。沒開限台（meihuaTaiFloor 為 0）一律
-   *  通過。門檻只看牌型台數本身，不含骰子加成的倍數（那是運氣加成，
-   *  不該影響「這手牌夠不夠格胡」的門檻判斷）；八仙過海這種固定台數
-   *  的特殊胡法不受此限。 */
+  /** 換牌（美麻）限台：這張牌胡下去，「純牌型」台數有沒有達到起胡門檻
+   *  （例如「3台」＝至少 3 台才能宣告胡牌，未達門檻的話這張牌就不算能
+   *  胡，跟牌型沒成一樣要當詐胡處理）。沒開限台（meihuaTaiFloor 為 0）
+   *  一律通過。
+   *  門檻「不計入骰子、也不計入莊家」：scoreHand() 本身就會把骰運
+   *  （全紅/骰歸等）跟莊家/連莊台直接算進 score.total（分別是運氣加成
+   *  跟身分加成，不是牌型本身的價值），這裡刻意把 ctx 的 dealerInvolved
+   *  /isDealer/dealerStreak/diceBonus 都清空重算一次「純牌型」台數，
+   *  真正結算用的 computeWin() 完全不受影響，兩邊各自獨立計算，不會
+   *  互相污染。八仙過海這種固定台數的特殊胡法不受此限。 */
   meetsMeihuaTaiFloor(seat, winTile, selfDraw, loser) {
     if (!this.meihuaTaiFloor) return true;
-    const score = scoreHand(this.buildScoreCtx(seat, winTile, selfDraw, loser));
+    const ctx = this.buildScoreCtx(seat, winTile, selfDraw, loser);
+    const pureCtx = { ...ctx, dealerInvolved: false, isDealer: false, dealerStreak: 0, diceBonus: null };
+    const score = scoreHand(pureCtx);
     return score.baXian || score.total >= this.meihuaTaiFloor;
   }
 
