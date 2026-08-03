@@ -374,7 +374,10 @@ function scoreHandForDecomp(ctx, fullHand, decomp) {
 
   /* --- 基本 --- */
   if (ctx.selfDraw) add('自摸', 1);
-  if (concealedWin && !liGu) {
+  /* --- 咪幾（早期宣告聽牌＋全程不吃碰槓）8台；不與門清重複計算，
+   *     其餘台數照常疊加 --- */
+  if (ctx.miji) add('咪幾', 8);
+  if (concealedWin && !liGu && !ctx.miji) {
     if (ctx.selfDraw) add('門清自摸', 2);
     else add('門清', 1);
   }

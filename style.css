@@ -684,6 +684,55 @@ input[type=text] {
   75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); }
 }
+/* 咪幾宣告：全螢幕澎湃動畫（金光大字＋放射光暈＋宣告者名字） */
+#miji-banner {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  background: radial-gradient(ellipse at center, rgba(232,200,106,.28), rgba(0,0,0,.55) 70%);
+  opacity: 0; pointer-events: none; z-index: 48;
+}
+#miji-banner .miji-word {
+  font-family: var(--font-cn, serif);
+  font-size: clamp(3.2rem, 12vw, 6.5rem); font-weight: 900; letter-spacing: 14px;
+  color: transparent;
+  background: linear-gradient(180deg, #fff8dc 0%, #ffd84d 40%, #b8860b 100%);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 24px rgba(255,216,77,.9)) drop-shadow(0 6px 14px rgba(0,0,0,.7));
+}
+#miji-banner .miji-who {
+  font-size: clamp(1rem, 3.5vw, 1.5rem); font-weight: 800; color: #fff3c4;
+  text-shadow: 0 2px 8px rgba(0,0,0,.8);
+}
+#miji-banner.play { animation: mijiBanner 2.2s cubic-bezier(.2,1.4,.35,1) forwards; }
+#miji-banner.play .miji-word { animation: mijiWord 2.2s cubic-bezier(.2,1.6,.35,1) forwards; }
+@keyframes mijiBanner {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes mijiWord {
+  0% { transform: scale(3) rotate(-8deg); }
+  15% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(1.12); }
+  25% { transform: scale(1); }
+  100% { transform: scale(1.05); }
+}
+
+/* 咪幾狀態徽章：掛在座位名字標籤上，全桌可見 */
+.seat-info.miji-on::after {
+  content: '咪幾';
+  margin-left: 6px; padding: 1px 7px; border-radius: 10px;
+  font-size: .68rem; font-weight: 900; letter-spacing: 1px;
+  color: #4a3800; background: linear-gradient(180deg, #fff3c4, var(--gold));
+  box-shadow: 0 0 8px rgba(232,200,106,.8);
+  animation: mijiBadgePulse 1.6s ease-in-out infinite;
+}
+@keyframes mijiBadgePulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(232,200,106,.6); }
+  50% { box-shadow: 0 0 14px rgba(232,200,106,1); }
+}
+
 .tile.center-discard {
   width: 48px; height: 64px; font-size: 22px;
   border-color: var(--gold);

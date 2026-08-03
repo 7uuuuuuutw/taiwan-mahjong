@@ -32,6 +32,8 @@ class GameEngine {
       guoShuiFrom: null, // 該牌是自摸（=自己座位）還是誰打出的
       meihuaReceived: [], // 換牌（美麻）剛收到的 3 張牌，UI 用來標示區隔；
                           // 打出下一張牌時清空（見 discard()）
+      miji: false,        // 咪幾：早期宣告聽牌＋全程不吃碰槓，胡牌加 8 台
+      mijiAllowed: null,  // 咪幾宣告當回合允許打出的牌（打出後鎖定，之後只能摸打）
     }));
     this.emit = emit;
     this.roundWind = opts.roundWind || 0;   // 0東
@@ -157,6 +159,11 @@ class GameEngine {
   autoDiscard(seat) {
     if (this.phase !== 'act' || this.turn !== seat) return;
     const p = this.seats[seat];
+    // 咪幾中逾時：宣告回合從允許清單挑、之後只能摸打，不能隨機挑
+    if (p.miji) {
+      if (p.mijiAllowed && p.mijiAllowed.length) return this.discard(seat, p.mijiAllowed[0]);
+      if (this.drawnTile) return this.discard(seat, this.drawnTile);
+    }
     const pool = p.hand.filter(t => !isFlower(t));
     if (pool.length === 0) return;
     // 逾時隨機打：跟其他打牌路徑一樣要避開吃碰限制的牌，不然隨機挑到剛好
@@ -202,6 +209,7 @@ class GameEngine {
       p.hand = []; p.melds = []; p.flowers = []; p.discards = [];
       p.guoShui = false; p.guoShuiTile = null; p.guoShuiFrom = null;
       p.meihuaReceived = [];
+      p.miji = false; p.mijiAllowed = null;
     }
     this.dice = null; this.diceBonus = null;
     this.lastDiscard = null;
@@ -578,13 +586,69 @@ class GameEngine {
     // 自摸（過水中、或明槓補牌時不得自摸；換牌限台開啟時還要達到起胡門檻）
     if (!p.guoShui && !this.blockTsumoThisDraw && isWinningHand(p.hand, p.melds, this.winOpts) &&
         this.meetsMeihuaTaiFloor(seat, tile || p.hand[p.hand.length - 1], true, null)) a.tsumo = true;
-    // 暗槓
-    a.concealedKongs = findConcealedKongs(p.hand);
-    // 加槓（手上有牌與已碰的刻子相同）
-    for (const m of p.melds) {
-      if (m.type === 'pong' && p.hand.includes(m.tiles[0])) a.addKongs.push(m.tiles[0]);
+    // 咪幾宣告後不得再開任何槓（暗槓也算破壞資格，宣告後乾脆完全不提供）
+    if (!p.miji) {
+      // 暗槓
+      a.concealedKongs = findConcealedKongs(p.hand);
+      // 加槓（手上有牌與已碰的刻子相同）
+      for (const m of p.melds) {
+        if (m.type === 'pong' && p.hand.includes(m.tiles[0])) a.addKongs.push(m.tiles[0]);
+      }
     }
+    // 咪幾宣告資格（見 mijiEligible）：資格成立時給 UI 顯示宣告按鈕
+    if (this.mijiEligible(seat)) a.miji = true;
     return a;
+  }
+
+  /** 咪幾宣告資格：從未吃碰槓（含暗槓，melds 全空）、還沒宣告過、全桌
+   *  棄牌總數 ≤ 8（大約各家打兩張內的早期）、且手上 17 張中存在「打出
+   *  某張後剩 16 張聽牌」的打法。 */
+  mijiEligible(seat) {
+    const p = this.seats[seat];
+    if (p.miji || p.melds.length > 0) return false;
+    const totalDiscards = this.seats.reduce((n, s) => n + s.discards.length, 0);
+    if (totalDiscards > 8) return false;
+    return this.mijiTenpaiDiscards(seat).length > 0;
+  }
+
+  /** 咪幾用：手上（含剛摸的第 17 張）打出哪些牌後，剩下 16 張是聽牌。 */
+  mijiTenpaiDiscards(seat) {
+    const p = this.seats[seat];
+    const hand = p.hand.filter(t => !isFlower(t));
+    const needMelds = 5 - p.melds.length;
+    if (hand.length !== needMelds * 3 + 2) return []; // 必須是「摸完待打」的張數
+    const result = [];
+    for (const t of new Set(hand)) {
+      const rest = hand.slice();
+      rest.splice(rest.indexOf(t), 1);
+      if (getTingTiles(rest, p.melds, this.winOpts).length > 0) result.push(t);
+    }
+    return result;
+  }
+
+  /** 宣告咪幾：鎖定手牌（這回合只能打「打完仍聽牌」的牌，之後只能摸打），
+   *  廣播事件讓所有人看到澎湃動畫。可以多家先後宣告，互不影響。 */
+  declareMiji(seat) {
+    if (this.phase !== 'act' || this.turn !== seat) return;
+    if (!this.mijiEligible(seat)) return;
+    const p = this.seats[seat];
+    p.miji = true;
+    p.mijiAllowed = this.mijiTenpaiDiscards(seat);
+    this.emit('mijiDeclared', { seat, name: p.name });
+    this.emitState(`${p.name} 咪幾！`);
+    // 宣告後仍要打出這回合的牌：真人重新送一次可行動作（槓已被 miji 擋
+    // 掉），AI 直接從允許清單挑一張打
+    if (p.isAI) {
+      const pick = p.mijiAllowed.includes(this.drawnTile) ? this.drawnTile : p.mijiAllowed[0];
+      setTimeout(() => {
+        if (this.dead || this.phase !== 'act' || this.turn !== seat) return;
+        this.discard(seat, pick);
+      }, 800);
+    } else {
+      const actions = this.selfActions(seat, this.drawnTile);
+      this.armTurnTimer(seat);
+      this.emit('yourTurn', { seat, tile: this.drawnTile, actions, timeLimit: this.turnLimitMs / 1000 });
+    }
   }
 
   /* -------- 玩家行動（來自 UI / AI）-------- */
@@ -600,13 +664,16 @@ class GameEngine {
     if (action.type === 'meihuaDirection') return this.chooseMeihuaDirection(seat, action.direction);
     if (action.type === 'meihuaSelect') return this.submitMeihuaSelection(seat, action.tiles);
     if (action.type === 'meihuaContinue') return this.decideMeihuaContinue(seat, !!action.swap);
+    // 咪幾宣告
+    if (action.type === 'declareMiji') return this.declareMiji(seat);
 
     if (this.phase === 'act' && seat === this.turn) {
       this.clearTurnTimer();
       if (action.type === 'discard') return this.discard(seat, action.tile);
       if (action.type === 'tsumo') return this.declareWin(seat, this.drawnTile, true);
-      if (action.type === 'concealedKong') return this.doConcealedKong(seat, action.tile);
-      if (action.type === 'addKong') return this.doAddKong(seat, action.tile);
+      // 咪幾中不得開任何槓（暗槓也算破壞資格）
+      if (action.type === 'concealedKong' && !this.seats[seat].miji) return this.doConcealedKong(seat, action.tile);
+      if (action.type === 'addKong' && !this.seats[seat].miji) return this.doAddKong(seat, action.tile);
     }
     if (this.phase === 'claim' && this.claimWindow) {
       return this.submitClaim(seat, action);
@@ -626,6 +693,17 @@ class GameEngine {
         p.hand.some(t => !p.kuikaeForbidden.includes(t))) {
       this.emitState(`${p.name} 剛吃／碰，這張不能打`);
       return;
+    }
+    // 咪幾鎖定：宣告當回合只能打「打完仍聽牌」的牌（mijiAllowed 清單）；
+    // 該回合打完後 mijiAllowed 清空，之後每回合只能摸打（打剛摸到的那張）
+    if (p.miji) {
+      if (p.mijiAllowed) {
+        if (!p.mijiAllowed.includes(tile)) { this.emitState(`${p.name} 咪幾中，這張打出去就不聽了`); return; }
+        p.mijiAllowed = null; // 宣告回合的打牌完成，之後進入「只能摸打」狀態
+      } else if (this.drawnTile && tile !== this.drawnTile) {
+        this.emitState(`${p.name} 咪幾中，只能打剛摸到的牌`);
+        return;
+      }
     }
     // 過水規則：
     //  - 這次打牌若是「放棄自摸」→ 進入過水（打出一張牌前不得再胡）
@@ -720,7 +798,8 @@ class GameEngine {
       // 胡（放槍 / 搶槓）；過水中不得胡；換牌限台開啟時還要達到起胡門檻
       if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds, this.winOpts) &&
           this.meetsMeihuaTaiFloor(seat, tile, false, from)) ent.hu = true;
-      if (!robbing) {
+      // 咪幾中不得吃碰槓（只剩胡的資格）
+      if (!robbing && !p.miji) {
         if (canPong(p.hand, tile)) ent.pong = true;
         // 禁止「槓上家」：打牌者若是本座位的上家（本座位為打牌者的下家），不得明槓
         const isDiscarderMyUpper = (seat === (from + 1) % 4);
@@ -983,6 +1062,12 @@ class GameEngine {
       if (this.paused) { setTimeout(run, PAUSE_POLL_MS); return; } // 暫停中：等恢復再接續
       if (this.phase !== 'act' || this.turn !== seat) return;
       if (actions.tsumo) return this.declareWin(seat, this.drawnTile, true);
+      // 咪幾中：只能摸打（打剛摸到的那張），沒有其他選擇
+      if (p.miji && !p.mijiAllowed && this.drawnTile) {
+        return this.discard(seat, this.drawnTile);
+      }
+      // 咪幾宣告資格：電腦一律宣告（8 台加成價值遠大於失去換牌彈性）
+      if (actions.miji) return this.declareMiji(seat);
       // 暗槓（有就槓，簡單策略）
       if (actions.concealedKongs && actions.concealedKongs.length) {
         return this.doConcealedKong(seat, actions.concealedKongs[0]);
@@ -1040,6 +1125,7 @@ class GameEngine {
       kongBloom: this.lastDrawWasKong && selfDraw,
       lastTile: this.drawableCount() <= 0, // 摸到/胡到可摸區最後一張 = 海底/河底
       concealedWin,
+      miji: p.miji, // 咪幾：胡牌加 8 台（不與門清重複計算，見 scoreHand）
       diceBonus: this.diceBonus,
       allowLiGu: this.rules.ligu,
     };
@@ -1345,6 +1431,9 @@ class GameEngine {
         melds: s.melds, flowers: s.flowers, discards: s.discards, score: s.score,
         guoShui: s.guoShui, kuikaeForbidden: s.kuikaeForbidden || [], connected: s.connected,
         meihuaReceived: s.meihuaReceived || [],
+        // 咪幾狀態是公開資訊（大家都看得到誰咪幾了）；mijiAllowed（宣告
+        // 回合允許打的牌）只跟自己有關，viewFor 會對別人遮掉
+        miji: s.miji, mijiAllowed: s.mijiAllowed || null,
       })),
       paused: this.paused, pausedSeat: this.pausedSeat,
     };
@@ -1356,13 +1445,13 @@ class GameEngine {
     snap.you = seat;
     snap.seats = snap.seats.map(s => {
       if (s.seat === seat) return s;
-      const { hand, meihuaReceived, ...rest } = s;
+      const { hand, meihuaReceived, mijiAllowed, ...rest } = s;
       const maskedMelds = (s.melds || []).map(m =>
         (m.type === 'kong' && m.concealed)
           ? { type: 'kong', concealed: true, hidden: true, tiles: [] }
           : m
       );
-      return { ...rest, hand: null, melds: maskedMelds, meihuaReceived: [] };
+      return { ...rest, hand: null, melds: maskedMelds, meihuaReceived: [], mijiAllowed: null };
     });
     return snap;
   }

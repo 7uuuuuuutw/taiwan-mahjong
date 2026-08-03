@@ -998,6 +998,11 @@ function hostEmit(event, payload) {
     const o = seatOwners[payload.seat];
     if (o.kind === 'client') net.sendTo(o.peerId, { type: 'rollDiceRequest' });
     else if (o.kind === 'host') showRollButton();
+  } else if (event === 'mijiDeclared') {
+    seatOwners.forEach(o => {
+      if (o.kind === 'client') net.sendTo(o.peerId, { type: 'mijiDeclared', payload });
+    });
+    showMijiBanner(payload.name);
   } else if (event === 'meihuaDirectionRequest') {
     const o = seatOwners[payload.seat];
     if (o.kind === 'client') net.sendTo(o.peerId, { type: 'meihuaDirectionRequest' });
@@ -1267,6 +1272,9 @@ function clientHandleHostMessage(msg) {
     case 'rollDiceRequest':
       showRollButton();
       break;
+    case 'mijiDeclared':
+      showMijiBanner(msg.payload.name);
+      break;
     case 'meihuaDirectionRequest':
       showMeihuaDirectionPrompt();
       break;
@@ -1512,6 +1520,8 @@ function renderSeat(s, pos, seat, view) {
   nameEl.textContent = windCh + (isDealer ? '莊 ' : '') + s.name;
   const scoreEl = area.querySelector('.seat-score');
   scoreEl.textContent = (s.score >= 0 ? '+' : '') + s.score;
+  // 咪幾狀態徽章（公開資訊，大家都看得到誰咪幾了）
+  area.querySelector('.seat-info').classList.toggle('miji-on', !!s.miji);
 
   // 手牌
   const handEl = area.querySelector('.seat-hand');
@@ -1701,6 +1711,21 @@ function updateDiceGlass(view, pool) {
   }, 85);
 }
 
+/** 咪幾宣告：全螢幕澎湃動畫，昭告全桌有玩家咪幾 */
+function showMijiBanner(name) {
+  let el = document.getElementById('miji-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'miji-banner';
+    el.innerHTML = '<div class="miji-word">咪幾！</div><div class="miji-who"></div>';
+    document.getElementById('game-screen').appendChild(el);
+  }
+  el.querySelector('.miji-who').textContent = name || '';
+  el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
+  Sound.yourTurn();
+  setTimeout(() => el.classList.remove('play'), 2200);
+}
+
 /** 豹子（三顆同數）大字閃現橫幅 */
 function showLeopardBanner(label) {
   let el = document.getElementById('leopard-banner');
@@ -1754,6 +1779,15 @@ function onClickHandTile(tile) {
     const hand = (me && me.hand) || [];
     const allBlocked = hand.length > 0 && hand.every(t => forbidden.includes(t));
     if (forbidden.includes(tile) && !allBlocked) { toast('剛吃／碰，這張不能打'); return; }
+    // 咪幾鎖定：宣告回合只能打「打完仍聽牌」的牌；之後只能摸打
+    if (me && me.miji) {
+      if (me.mijiAllowed) {
+        if (!me.mijiAllowed.includes(tile)) { toast('咪幾中，這張打出去就不聽了'); return; }
+      } else if (lastView.drawnTile && tile !== lastView.drawnTile) {
+        toast('咪幾中，只能打剛摸到的牌');
+        return;
+      }
+    }
   }
   // 出牌
   hasDiscardedOnce = true;
@@ -1824,8 +1858,18 @@ function attachDragDiscard(el, tile) {
         return;
       }
 
+      // 咪幾鎖定：不合法的牌直接彈回（跟吃碰限制一樣的視覺處理），避免
+      // 交給 onClickHandTile 擋下時牌停在半空中沒有彈回動畫
+      const meMiji = lastView && lastView.seats[mySeat] && lastView.seats[mySeat].miji ? lastView.seats[mySeat] : null;
+      const mijiBlocked = meMiji && (
+        meMiji.mijiAllowed ? !meMiji.mijiAllowed.includes(tile)
+          : (lastView.drawnTile && tile !== lastView.drawnTile));
+
       if (play && forbidden.includes(tile)) {
         toast('剛吃／碰，這張不能打');
+        bounceBack();
+      } else if (play && mijiBlocked) {
+        toast(meMiji.mijiAllowed ? '咪幾中，這張打出去就不聽了' : '咪幾中，只能打剛摸到的牌');
         bounceBack();
       } else if (play) {
         onClickHandTile(tile); // 之後 renderView 會重建手牌，這張自然消失
@@ -1860,6 +1904,10 @@ function showTurnActions(payload) {
     for (const t of a.addKongs) {
       addActionBtn(bar, '加槓 ' + tileName(t), 'kong', () => sendAction({ type: 'addKong', tile: t }));
     }
+  }
+  // 咪幾宣告：早期聽牌＋全程不吃碰槓，胡牌加 8 台（宣告後只能摸打）
+  if (a.miji) {
+    addActionBtn(bar, '✨ 咪幾', 'win', () => sendAction({ type: 'declareMiji' }));
   }
   // 出牌操作提示：只在本次連線的第一次打牌前顯示一次
   if (!hasDiscardedOnce) {
