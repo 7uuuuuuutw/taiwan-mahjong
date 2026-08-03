@@ -442,6 +442,28 @@ input[type=text] {
   box-shadow: 0 0 0 3px var(--gold), 0 6px 10px rgba(0,0,0,.4);
 }
 
+/* 換牌（美麻）剛收到的牌：發藍光＋「換」字標示，跟「剛摸上來」的金色
+   發光（.just-drawn）用不同顏色區隔，避免兩種「新牌」混在一起看不出來
+   哪張是摸的、哪張是換牌換來的。持續到下次打牌前（見 game.js 的
+   discard() 清空 meihuaReceived）。 */
+.seat-bottom .seat-hand .tile.meihua-received {
+  border-color: var(--blue);
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    0 1px 0 #efe8d5, 0 3px 0 #e4ddc8, 0 5px 0 #d8d1ba,
+    0 7px 0 #ccc5ac, 0 9px 0 #c0b99f,
+    0 0 14px 3px var(--blue), 0 12px 12px rgba(0,0,0,.45);
+  animation: meihuaReceivedGlow 1.1s ease-in-out infinite alternate;
+}
+@keyframes meihuaReceivedGlow {
+  from { box-shadow: inset 0 2px 2px rgba(255,255,255,.95), 0 1px 0 #efe8d5, 0 3px 0 #e4ddc8, 0 5px 0 #d8d1ba, 0 7px 0 #ccc5ac, 0 9px 0 #c0b99f, 0 0 10px 2px var(--blue), 0 12px 12px rgba(0,0,0,.45); }
+  to   { box-shadow: inset 0 2px 2px rgba(255,255,255,.95), 0 1px 0 #efe8d5, 0 3px 0 #e4ddc8, 0 5px 0 #d8d1ba, 0 7px 0 #ccc5ac, 0 9px 0 #c0b99f, 0 0 20px 6px var(--blue), 0 12px 12px rgba(0,0,0,.45); }
+}
+.seat-bottom .seat-hand .tile.meihua-received::before {
+  content: '換'; position: absolute; top: -2px; right: 1px;
+  font-size: 9px; color: var(--blue); font-weight: 800; opacity: .9;
+}
+
 /* 拖曳打牌 */
 .seat-bottom .seat-hand .tile.clickable { cursor: grab; touch-action: none; }
 .tile.dragging {

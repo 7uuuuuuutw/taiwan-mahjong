@@ -30,6 +30,8 @@ class GameEngine {
       guoShui: false, // 過水：棄胡後，打出一張牌前不得再胡
       guoShuiTile: null, // 過水當下放棄的那張胡牌（結算詐胡時要亮出來）
       guoShuiFrom: null, // 該牌是自摸（=自己座位）還是誰打出的
+      meihuaReceived: [], // 換牌（美麻）剛收到的 3 張牌，UI 用來標示區隔；
+                          // 打出下一張牌時清空（見 discard()）
     }));
     this.emit = emit;
     this.roundWind = opts.roundWind || 0;   // 0東
@@ -197,6 +199,7 @@ class GameEngine {
     for (const p of this.seats) {
       p.hand = []; p.melds = []; p.flowers = []; p.discards = [];
       p.guoShui = false; p.guoShuiTile = null; p.guoShuiFrom = null;
+      p.meihuaReceived = [];
     }
     this.dice = null; this.diceBonus = null;
     this.lastDiscard = null;
@@ -458,8 +461,10 @@ class GameEngine {
     for (const p of this.seats) {
       // 傳下家：自己收到「上家」傳來的；傳上家則反過來收到「下家」傳來的
       const fromSeat = dir === 'down' ? (p.seat + 3) % 4 : (p.seat + 1) % 4;
-      p.hand.push(...(given[fromSeat] || []));
+      const received = given[fromSeat] || [];
+      p.hand.push(...received);
       p.hand = sortTiles(p.hand);
+      p.meihuaReceived = received.slice(); // UI 標示用；下次打牌時清空
     }
     this.meihuaRound++;
     this.emitState(`換牌第 ${this.meihuaRound} 輪完成`);
@@ -617,6 +622,7 @@ class GameEngine {
     }
     this.tsumoAvailable = false;
     p.kuikaeForbidden = null;
+    p.meihuaReceived = []; // 換牌收到的牌只標示到「下一次打牌前」，這裡清空
 
     p.hand.splice(idx, 1);
     p.discards.push(tile);
@@ -1300,6 +1306,7 @@ class GameEngine {
         handCount: s.hand.length, hand: s.hand,
         melds: s.melds, flowers: s.flowers, discards: s.discards, score: s.score,
         guoShui: s.guoShui, kuikaeForbidden: s.kuikaeForbidden || [], connected: s.connected,
+        meihuaReceived: s.meihuaReceived || [],
       })),
       paused: this.paused, pausedSeat: this.pausedSeat,
     };
@@ -1311,13 +1318,13 @@ class GameEngine {
     snap.you = seat;
     snap.seats = snap.seats.map(s => {
       if (s.seat === seat) return s;
-      const { hand, ...rest } = s;
+      const { hand, meihuaReceived, ...rest } = s;
       const maskedMelds = (s.melds || []).map(m =>
         (m.type === 'kong' && m.concealed)
           ? { type: 'kong', concealed: true, hidden: true, tiles: [] }
           : m
       );
-      return { ...rest, hand: null, melds: maskedMelds };
+      return { ...rest, hand: null, melds: maskedMelds, meihuaReceived: [] };
     });
     return snap;
   }

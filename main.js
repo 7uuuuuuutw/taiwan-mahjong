@@ -1526,9 +1526,16 @@ function renderSeat(s, pos, seat, view) {
       if (i >= 0) drawn = tiles.splice(i, 1)[0];
     }
     const forbidden = s.kuikaeForbidden || [];
+    // 換牌（美麻）剛收到的牌：用「還沒配對到的剩餘清單」逐張比對再扣掉，
+    // 而不是單純 includes()——手牌可能同時有「換牌收到的」跟「換牌前就
+    // 有的」同一種牌，只用牌值比對會把兩種都標記到，用清單扣除才只會
+    // 標記到跟收到張數相符的數量。
+    const receivedPool = (s.meihuaReceived || []).slice();
     for (const t of tiles) {
       const el = makeTile(t, true);
       if (forbidden.includes(t)) el.classList.add('tile-forbidden');
+      const ri = receivedPool.indexOf(t);
+      if (ri >= 0) { el.classList.add('meihua-received'); receivedPool.splice(ri, 1); }
       attachDragDiscard(el, t);
       handEl.appendChild(el);
     }
