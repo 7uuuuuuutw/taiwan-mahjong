@@ -797,9 +797,12 @@ class GameEngine {
       const seat = (from + k) % 4;
       const p = this.seats[seat];
       const ent = {};
-      // 胡（放槍 / 搶槓）；過水中不得胡；換牌限台開啟時還要達到起胡門檻
-      if (!p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds, this.winOpts) &&
-          this.meetsMeihuaTaiFloor(seat, tile, false, from)) ent.hu = true;
+      // 胡（放槍 / 搶槓）；過水中不得胡；換牌限台開啟時還要達到起胡門檻。
+      // 牌型本身有成、只是台數不夠的情況額外記一個旗標，讓後面 declareHuAttempt
+      // 誤按時能給出正確的詐胡說明（不能講成「牌未成」，牌其實是成的）。
+      const shapeOk = !p.guoShui && isWinningHand(p.hand.concat([tile]), p.melds, this.winOpts);
+      if (shapeOk && this.meetsMeihuaTaiFloor(seat, tile, false, from)) ent.hu = true;
+      else if (shapeOk) ent.huBlockedByTaiFloor = true;
       // 咪幾中不得吃碰槓（只剩胡的資格）
       if (!robbing && !p.miji) {
         if (canPong(p.hand, tile)) ent.pong = true;
@@ -1221,8 +1224,11 @@ class GameEngine {
    * @param misTile 誤以為靠這張牌成牌——自摸誤按是剛摸到的那張（已經在
    *   手牌裡），索取階段誤按是別家剛打出、還沒進手牌的那張；呼叫端要在
    *   呼叫這個函式「之前」就把值準備好傳進來，因為函式內部一開始就會把
-   *   this.claimWindow／this.drawnTile 都清空。 */
-  falseHu(seat, misTile) {
+   *   this.claimWindow／this.drawnTile 都清空。
+   * @param reason 'shape'（預設）＝牌型真的沒湊成；'tai-floor'＝牌型其實
+   *   已經湊成了，只是換牌限台沒達到起胡門檻——兩種情況賠付方式相同，
+   *   但結算畫面的說明文字要講清楚是哪一種，不能都講成「牌未成」。 */
+  falseHu(seat, misTile, reason = 'shape') {
     if (this.phase === 'over' || this.phase === 'dice' || this.phase === 'dice-rolled' || this.phase === 'dealing') return;
     clearTimeout(this.claimTimer);
     this.clearTurnTimer();
@@ -1231,6 +1237,19 @@ class GameEngine {
     this.phase = 'over';
     const p = this.seats[seat];
     const estTai = this.estimateNearestWinTai(seat);
+    // tai-floor 情況下，實際「已經湊成的那個牌型」台數（不含骰子/莊家，
+    // 跟起胡門檻本身用的算法一致）——跟 estTai（賠付依據，取聽牌中台數
+    // 最高的那個，不一定跟真的打算胡的那個牌型一樣）分開算，只給結算
+    // 畫面顯示用，不影響賠付金額。
+    let mijiTaiFloorPureTai = null;
+    if (reason === 'tai-floor' && misTile) {
+      const selfDraw = this.turn === seat; // 自己回合誤按＝自摸；索取階段誤按＝別人打的
+      // loser 傳 null 沒關係——下面 pureCtx 會把 dealerInvolved 蓋回 false，
+      // 不影響「純牌型」台數的計算結果
+      const ctx = this.buildScoreCtx(seat, misTile, selfDraw, null);
+      const pureCtx = { ...ctx, dealerInvolved: false, isDealer: false, dealerStreak: 0, diceBonus: null };
+      mijiTaiFloorPureTai = scoreHand(pureCtx).total;
+    }
     const dealerExtraTai = 1 + this.dealerStreak * 2;
     const baseValue = this.baseDi + estTai * this.baseTai;
     const payments = [];
@@ -1253,6 +1272,11 @@ class GameEngine {
       // 亮出詐胡者的牌，讓大家能確認他牌真的沒成；misTile 額外標出他
       // 誤以為靠哪張牌成牌（可能為 null，例如過水詐胡不是靠算錯牌型）
       hand: p.hand.slice(), melds: p.melds, flowers: p.flowers, misTile: misTile || null,
+      // blockedReason：'tai-floor' 代表牌型其實已經湊成，只是換牌限台
+      // 沒達到起胡門檻——結算文字要講清楚，不能講成「牌未成」；
+      // mijiTaiFloorPureTai 是這個情況下實際湊成的牌型台數（不含骰子/
+      // 莊家），只給顯示用。
+      blockedReason: reason, mijiTaiFloorPureTai,
       scores: this.seats.map(s => s.score),
       dealerWin: false,
       roundEnding: this.willCompleteFullRound(false),
@@ -1303,9 +1327,10 @@ class GameEngine {
     // 自己回合（摸牌後）
     if (this.phase === 'act' && this.turn === seat) {
       const winTile = this.drawnTile || p.hand[p.hand.length - 1];
+      const shapeOk = isWinningHand(p.hand, p.melds, this.winOpts);
       // 換牌限台開啟時，牌型沒達到起胡門檻就當作沒成牌（詐胡），跟牌型
       // 真的沒湊成一樣處理
-      if (isWinningHand(p.hand, p.melds, this.winOpts) && this.meetsMeihuaTaiFloor(seat, winTile, true, null)) {
+      if (shapeOk && this.meetsMeihuaTaiFloor(seat, winTile, true, null)) {
         // 大明槓（吃別人棄牌湊成的槓）補的牌不能自摸；暗槓與加槓都可以
         if (this.blockTsumoThisDraw) { this.emitState(`${p.name} 明槓補牌，此張不能自摸`); return; }
         // 過水中不提示、不攔下——刻意讓玩家自己記得，仍宣告就當詐胡處理
@@ -1313,9 +1338,10 @@ class GameEngine {
         this.clearTurnTimer();
         return this.declareWin(seat, winTile, true);
       }
-      // 自摸誤按：他以為靠剛摸到的這張成牌，實際上沒有（或牌型有成，但
-      // 換牌限台開啟時沒達到門檻，一樣視為詐胡）
-      return this.falseHu(seat, winTile);
+      // 自摸誤按：他以為靠剛摸到的這張成牌，實際上沒有；shapeOk 為 true
+      // 代表牌型其實有成，是換牌限台沒達到門檻，說明文字要講對，不能講
+      // 成「牌未成」
+      return this.falseHu(seat, winTile, shapeOk ? 'tai-floor' : 'shape');
     }
     // 索取階段（別人打牌）：這才是真正「面對一張牌決定要不要胡」的時刻
     if (this.phase === 'claim' && this.claimWindow) {
@@ -1323,8 +1349,9 @@ class GameEngine {
       if (ent && ent.hu) return this.submitClaim(seat, { action: 'hu' });
       // ent.hu 在過水中本來就不會被標記（見 openClaimWindow），跟真的沒
       // 成牌一樣直接視為詐胡，不額外提示「過水中不能胡」
-      // 索取誤按：他以為靠這張別人剛打出的牌成牌，實際上沒有
-      return this.falseHu(seat, this.claimWindow.tile);
+      // 索取誤按：他以為靠這張別人剛打出的牌成牌，實際上沒有（或牌型有
+      // 成、只是換牌限台沒達到門檻，ent.huBlockedByTaiFloor 會標記這種情況）
+      return this.falseHu(seat, this.claimWindow.tile, (ent && ent.huBlockedByTaiFloor) ? 'tai-floor' : 'shape');
     }
     // 其他時機（不是你的回合、也沒有正在等你決定的牌）：
     // 例如反應窗口已過、輪到別家——此時按胡鈕不處罰，只提示，

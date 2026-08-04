@@ -2150,13 +2150,20 @@ function renderHandOverModal(payload) {
     const offenderReveal = payload.hand
       ? `<div class="reveal-row">${tilesRowHTML(payload.hand, misInHand ? misTile : null)}${offenderMeldTiles.length ? `<span class="reveal-sep">｜</span>${tilesRowHTML(offenderMeldTiles)}` : ''}${misTileSep}</div>`
       : '';
-    const misTileNote = misTile ? `誤以為靠 <b>${escapeHtml(tileName(misTile))}</b> 這張成牌，其實沒有。` : '';
+    // 換牌限台：牌型其實已經湊成，只是台數沒達到起胡門檻——文案要講清楚
+    // 「牌是成的」，不能跟真的沒湊成混在一起講成「牌未成」。
+    const isTaiFloorBlock = payload.blockedReason === 'tai-floor';
+    const misTileNote = misTile
+      ? (isTaiFloorBlock
+          ? `這張牌其實已經成牌，但只有 <b>${payload.mijiTaiFloorPureTai}</b> 台，未達美麻起胡門檻，依規定仍算詐胡。`
+          : `誤以為靠 <b>${escapeHtml(tileName(misTile))}</b> 這張成牌，其實沒有。`)
+      : '';
     // 過水中仍宣告胡：牌其實已經成了，只是被過水擋下——跟真的沒成牌的
     // 詐胡文案不同，並亮出當初放棄的那張牌／來源讓大家核對這次判定。
     const gs = payload.guoShui;
     const desc = gs
       ? `過水中仍宣告胡牌，依規定算詐胡：${escapeHtml(seatName(payload.offender))} 這輪已經放棄過${gs.from === payload.offender ? '自己摸到的' : ('　' + escapeHtml(seatName(gs.from)) + ' 打出的')}這張牌，打出一張牌前不得再胡。`
-      : `牌未成卻宣告胡牌。${misTileNote}`;
+      : (isTaiFloorBlock ? misTileNote : `牌未成卻宣告胡牌。${misTileNote}`);
     const guoShuiReveal = (gs && gs.tile) ? `<div class="reveal-row">${tilesRowHTML([gs.tile], gs.tile)}</div>` : '';
     body.innerHTML = roundBanner + `
       <h2>💥 ${escapeHtml(seatName(payload.offender))} 詐胡！</h2>
