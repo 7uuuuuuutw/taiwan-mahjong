@@ -600,12 +600,14 @@ class GameEngine {
     return a;
   }
 
-  /** 咪幾宣告資格：從未吃碰槓（含暗槓，melds 全空）、還沒宣告過、全桌
-   *  棄牌總數 ≤ 8（大約各家打兩張內的早期）、且手上 17 張中存在「打出
-   *  某張後剩 16 張聽牌」的打法。 */
+  /** 咪幾宣告資格：「全桌任何人」都從未吃碰槓（含暗槓——不只自己，任何
+   *  一家有面子就整桌都不能再咪幾）、還沒宣告過、全桌棄牌總數 ≤ 8（大約
+   *  各家打兩張內的早期）、且手上 17 張中存在「打出某張後剩 16 張聽牌」
+   *  的打法。 */
   mijiEligible(seat) {
     const p = this.seats[seat];
-    if (p.miji || p.melds.length > 0) return false;
+    if (p.miji) return false;
+    if (this.seats.some(s => s.melds.length > 0)) return false;
     const totalDiscards = this.seats.reduce((n, s) => n + s.discards.length, 0);
     if (totalDiscards > 8) return false;
     return this.mijiTenpaiDiscards(seat).length > 0;
