@@ -401,6 +401,12 @@ input[type=text] {
     0 1px 0 #efe8d5, 0 3px 0 #e4ddc8, 0 5px 0 #d8d1ba,
     0 7px 0 #ccc5ac, 0 9px 0 #c0b99f,
     0 12px 12px rgba(0,0,0,.45);
+  /* 換牌選牌等靠 class 切換 transform/box-shadow 的狀態，統一在這裡給一個
+     持續生效的過場動畫，不用每個狀態各自在 JS 裡用行內樣式湊時間、湊出
+     來的動畫容易兜不齊（例如只有 transform 有過場、box-shadow 沒有，看
+     起來一半滑順一半瞬間跳掉）。拖曳中（.dragging）會用 !important 蓋掉
+     這裡，跟著手指走不能有延遲，兩者不衝突。 */
+  transition: transform .18s ease, box-shadow .18s ease;
 }
 .seat-bottom .seat-hand .tile.clickable:hover {
   transform: translateY(-12px);
@@ -436,10 +442,18 @@ input[type=text] {
   filter: grayscale(.6) brightness(.6);
 }
 
-/* 換牌（美麻）選牌階段：已勾選要換出去的牌，往上抬一點＋金色外框提示 */
+/* 換牌（美麻）選牌階段：已勾選要換出去的牌，往上抬一點＋金色外框提示。
+   box-shadow 沿用其他特殊狀態（.just-drawn/.meihua-received）同一套
+   多層堆疊陰影再疊加金色外框，不能整個換成兩層陰影——那樣會蓋掉原本
+   讓牌看起來「立體疊高」的那幾層堆疊層次，選起來的牌會突然變得扁平，
+   跟其他張牌的質感兜不起來，看起來像是哪裡壞了。 */
 .seat-bottom .seat-hand .tile.meihua-selected {
   transform: translateY(-10px);
-  box-shadow: 0 0 0 3px var(--gold), 0 6px 10px rgba(0,0,0,.4);
+  box-shadow:
+    inset 0 2px 2px rgba(255,255,255,.95),
+    0 1px 0 #efe8d5, 0 3px 0 #e4ddc8, 0 5px 0 #d8d1ba,
+    0 7px 0 #ccc5ac, 0 9px 0 #c0b99f,
+    0 0 0 3px var(--gold), 0 12px 16px rgba(0,0,0,.5);
 }
 
 /* 換牌（美麻）剛收到的牌：發藍光＋「換」字標示，跟「剛摸上來」的金色

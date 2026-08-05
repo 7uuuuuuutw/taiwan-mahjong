@@ -1852,8 +1852,14 @@ function attachDragDiscard(el, tile) {
 
       // 換牌（美麻）選牌階段：點/拖手牌是切換勾選，不是打牌，跟一般打牌
       // 的邏輯（吃碰限制、送出 discard）完全無關，優先判斷、直接分流。
+      // 這裡不用 bounceBack()：那是為了「打牌被擋下、彈回原位」這種情境
+      // 才用行內 transition 湊出的暫時性動畫，只蓋得到 transform，跟
+      // .meihua-selected 的 box-shadow 切換兜不齊。選牌用的上抬/取消上抬
+      // 動畫已經交給 CSS 的常駐 transition（style.css 的 .tile 規則）處理，
+      // 這裡只需要把拖曳暫時加上去的行內 transform 跟 class 清掉即可。
       if (meihuaSelecting) {
-        bounceBack();
+        el.style.transform = '';
+        el.classList.remove('dragging', 'will-play');
         if (play) onMeihuaTileClick(tile, el);
         return;
       }
