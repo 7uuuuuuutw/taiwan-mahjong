@@ -2161,7 +2161,7 @@ function renderHandOverModal(payload) {
     const isTaiFloorBlock = payload.blockedReason === 'tai-floor';
     const misTileNote = misTile
       ? (isTaiFloorBlock
-          ? `這張牌其實已經成牌，但只有 <b>${payload.mijiTaiFloorPureTai}</b> 台，未達美麻起胡門檻，依規定仍算詐胡。`
+          ? `這張牌其實已經成牌，但只有 <b>${payload.mijiTaiFloorPureTai}</b> 台，未達${payload.meihuaTaiFloor ? `美麻起胡門檻的 <b>${payload.meihuaTaiFloor}</b> 台` : '美麻起胡門檻'}，依規定仍算詐胡。`
           : `誤以為靠 <b>${escapeHtml(tileName(misTile))}</b> 這張成牌，其實沒有。`)
       : '';
     // 過水中仍宣告胡：牌其實已經成了，只是被過水擋下——跟真的沒成牌的

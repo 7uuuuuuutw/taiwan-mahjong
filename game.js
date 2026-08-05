@@ -1275,8 +1275,9 @@ class GameEngine {
       // blockedReason：'tai-floor' 代表牌型其實已經湊成，只是換牌限台
       // 沒達到起胡門檻——結算文字要講清楚，不能講成「牌未成」；
       // mijiTaiFloorPureTai 是這個情況下實際湊成的牌型台數（不含骰子/
-      // 莊家），只給顯示用。
-      blockedReason: reason, mijiTaiFloorPureTai,
+      // 莊家），meihuaTaiFloor 是房間設定的起胡門檻本身（例如 3），兩個
+      // 一起給顯示用，這樣文案才能講清楚「差多少台」，不是只籠統帶過。
+      blockedReason: reason, mijiTaiFloorPureTai, meihuaTaiFloor: this.meihuaTaiFloor,
       scores: this.seats.map(s => s.score),
       dealerWin: false,
       roundEnding: this.willCompleteFullRound(false),
