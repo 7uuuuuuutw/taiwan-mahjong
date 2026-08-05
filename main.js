@@ -2171,9 +2171,15 @@ function renderHandOverModal(payload) {
       ? `過水中仍宣告胡牌，依規定算詐胡：${escapeHtml(seatName(payload.offender))} 這輪已經放棄過${gs.from === payload.offender ? '自己摸到的' : ('　' + escapeHtml(seatName(gs.from)) + ' 打出的')}這張牌，打出一張牌前不得再胡。`
       : (isTaiFloorBlock ? misTileNote : `牌未成卻宣告胡牌。${misTileNote}`);
     const guoShuiReveal = (gs && gs.tile) ? `<div class="reveal-row">${tilesRowHTML([gs.tile], gs.tile)}</div>` : '';
+    // 賠付依據的文案也要跟著 isTaiFloorBlock 分流：牌型其實已經湊成，只是
+    // 差在台數不夠，不能再講「最接近的聽牌」——那是「牌沒成、用聽牌估算」
+    // 才該用的講法，混在一起講會讓人以為牌沒成，跟上面 desc 打架。
+    const payBasisNote = isTaiFloorBlock
+      ? `依詐胡賠付台數（${payload.estTai} 台）賠付各家，並讓出莊位。`
+      : `依最接近的聽牌（${payload.estTai} 台）賠付各家，並讓出莊位。`;
     body.innerHTML = roundBanner + `
       <h2>💥 ${escapeHtml(seatName(payload.offender))} 詐胡！</h2>
-      <p class="win-way">${desc}依最接近的聽牌（${payload.estTai} 台）賠付各家，並讓出莊位。</p>
+      <p class="win-way">${desc}${payBasisNote}</p>
       ${guoShuiReveal}
       ${offenderReveal}
       <div class="tai-list"><ul>${payRows}</ul></div>
